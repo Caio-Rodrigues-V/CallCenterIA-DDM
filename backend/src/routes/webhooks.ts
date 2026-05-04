@@ -14,6 +14,20 @@ const MIN_DURATION_FOR_SUCCESS = 15;
 
 export const webhooksRouter = Router();
 
+function isObject(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function buildMetadataFromPayload(call: any, metadata: any): Record<string, any> {
+  const payloadMetadata = isObject(metadata) ? metadata : {};
+  const callMetadata = isObject(call?.metadata) ? call.metadata : {};
+
+  return {
+    ...payloadMetadata,
+    ...callMetadata
+  };
+}
+
 webhooksRouter.post('/vapi/callback', async (req, res) => {
   try {
     let payload: any = req.body;
@@ -24,7 +38,7 @@ webhooksRouter.post('/vapi/callback', async (req, res) => {
     }
 
     const { call, metadata } = payload;
-    const metadataFromCall = call?.metadata ?? metadata ?? {};
+    const metadataFromCall = buildMetadataFromPayload(call, metadata);
 
     let existingCall: { id: string; campaign_contact_id: string | null } | null = null;
     const { data: foundCall, error: findError } = await supabaseAdmin
@@ -40,7 +54,8 @@ webhooksRouter.post('/vapi/callback', async (req, res) => {
         .select('id, campaign_contact_id')
         .eq('campaign_contact_id', metadataFromCall.campaignContactId)
         .is('vapi_call_id', null)
-        .in('status', ['queued', 'em_andamento'])
+        .is('started_at', null)
+        .is('metadata_raw', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
