@@ -11,6 +11,9 @@ const technicalFailures = [
 ];
 const successfulEndings = ['customer-ended-call', 'assistant-ended-call', 'Sem Débito', 'Sem DÃ©bito'];
 const MIN_DURATION_FOR_SUCCESS = 15;
+const FORMALIZATION_AGREEMENT_WEBHOOK_URL =
+  process.env.N8N_FORMALIZACAO_ACORDO_WEBHOOK_URL ||
+  'https://n8n-n8n-start.xzz0ed.easypanel.host/webhook/acordo_formalizado';
 
 export const webhooksRouter = Router();
 
@@ -26,6 +29,101 @@ function buildMetadataFromPayload(call: any, metadata: any): Record<string, any>
     ...payloadMetadata,
     ...callMetadata
   };
+}
+
+function firstNonEmpty(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const str = String(value).trim();
+    if (str) return str;
+  }
+
+  return null;
+}
+
+function buildFormalizationPayload(payload: any, call: any, metadataFromCall: Record<string, any>, callDbId: string) {
+  const assistantVariableValues = {
+    ...(isObject(call?.assistantOverrides?.variableValues) ? call.assistantOverrides.variableValues : {}),
+    ...(isObject(payload?.assistantOverrides?.variableValues) ? payload.assistantOverrides.variableValues : {})
+  };
+
+  const cpf = firstNonEmpty(
+    metadataFromCall.cpf,
+    metadataFromCall.Valorcpf,
+    metadataFromCall.valorcpf,
+    assistantVariableValues.Valorcpf,
+    assistantVariableValues.cpf
+  );
+
+  const artifact = isObject(call?.artifact) ? call.artifact : {};
+  const artifactVariables = {
+    ...(isObject(artifact.variables) ? artifact.variables : {}),
+    ...assistantVariableValues,
+    ...(cpf ? { Valorcpf: cpf } : {})
+  };
+
+  return {
+    type: 'end-of-call-report',
+    table: 'calls',
+    record: {
+      id: callDbId,
+      vapi_call_id: call?.id || null,
+      cliente: firstNonEmpty(call?.customer?.name, metadataFromCall.customerName, metadataFromCall.nome),
+      cpf,
+      customer_number: firstNonEmpty(call?.customer?.number, metadataFromCall.customerNumber, metadataFromCall.telefone),
+      started_at: call?.startedAt || null,
+      ended_at: call?.endedAt || null,
+      status: firstNonEmpty(call?.status, 'ended'),
+      ended_reason: call?.endedReason || null,
+      summary: firstNonEmpty(call?.analysis?.summary, call?.summary),
+      transcript: firstNonEmpty(call?.artifact?.transcript, call?.transcript),
+      metadata_raw: {
+        ...payload,
+        call,
+        metadata: metadataFromCall,
+        artifact: {
+          ...artifact,
+          variables: artifactVariables
+        }
+      }
+    }
+  };
+}
+
+async function postFormalizationAgreementWebhook(
+  payload: any,
+  call: any,
+  metadataFromCall: Record<string, any>,
+  callDbId: string
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(FORMALIZATION_AGREEMENT_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-source': 'callcenteria-backend',
+        'x-event-type': 'end-of-call-report'
+      },
+      body: JSON.stringify(buildFormalizationPayload(payload, call, metadataFromCall, callDbId)),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => '');
+      console.error('[webhooks/vapi/callback] formalization webhook error', {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody
+      });
+    }
+  } catch (error) {
+    console.error('[webhooks/vapi/callback] formalization webhook failed', error);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 webhooksRouter.post('/vapi/callback', async (req, res) => {
@@ -158,6 +256,8 @@ webhooksRouter.post('/vapi/callback', async (req, res) => {
 
     const { error: updateError } = await supabaseAdmin.from('calls').update(updateData).eq('id', existingCall.id);
     if (updateError) throw new Error(`Erro ao atualizar chamada: ${updateError.message}`);
+
+    await postFormalizationAgreementWebhook(payload, call, metadataFromCall, existingCall.id);
 
     const campaignContactId = existingCall.campaign_contact_id || metadataFromCall?.campaignContactId;
     if (campaignContactId) {
