@@ -134,6 +134,8 @@ async function executeCampaignStart(campaignId: string): Promise<{
   const resolvedBackendPublicUrl = await getBackendPublicUrl();
   const callbackUrl = `${resolvedBackendPublicUrl}/api/webhooks/vapi/callback`;
   const pacer = new RequestPacer();
+  const campaignConcurrency = Math.max(1, Number(campaign.ligacoes_simultaneas) || 1);
+  const effectiveConcurrency = Math.min(env.campaignStartMaxConcurrency, campaignConcurrency);
 
   const processContact = async (cc: any, lineIndex: number): Promise<ProcessResult> => {
     const contact = Array.isArray(cc.contacts) ? cc.contacts[0] : cc.contacts;
@@ -203,7 +205,7 @@ async function executeCampaignStart(campaignId: string): Promise<{
 
   console.log(
     `[campaigns/start] iniciando ${eligibleContacts.length} contatos ` +
-      `com concorrencia=${env.campaignStartMaxConcurrency}, ` +
+      `com concorrencia=${effectiveConcurrency}, ` +
       `batchSize=${env.campaignStartBatchSize}, ` +
       `requestIntervalMs=${env.campaignStartRequestIntervalMs}, ` +
       `pauseMs=${env.campaignStartPauseMs}`
@@ -214,7 +216,7 @@ async function executeCampaignStart(campaignId: string): Promise<{
 
     const batchResult = await processWithConcurrency(
       batch,
-      env.campaignStartMaxConcurrency,
+      effectiveConcurrency,
       (contact: any, index: number) => processContact(contact, i + index)
     );
 
@@ -262,25 +264,19 @@ campaignsRouter.post('/start', async (req, res) => {
     }
 
     activeCampaignRuns.add(campaignId);
+    const summary = await executeCampaignStart(campaignId);
+    activeCampaignRuns.delete(campaignId);
 
-    void (async () => {
-      try {
-        const summary = await executeCampaignStart(campaignId);
-        console.log(
-          `[campaigns/start] execucao concluida campaign=${campaignId} ` +
-            `processados=${summary.totalProcessed} sucesso=${summary.successful} falhas=${summary.failed}`
-        );
-      } catch (error: any) {
-        console.error('[campaigns/start] background error', error);
-      } finally {
-        activeCampaignRuns.delete(campaignId);
-      }
-    })();
+    console.log(
+      `[campaigns/start] execucao concluida campaign=${campaignId} ` +
+        `processados=${summary.totalProcessed} sucesso=${summary.successful} falhas=${summary.failed}`
+    );
 
-    return res.status(202).json({
+    return res.json({
       success: true,
-      message: 'Processamento iniciado em background',
-      campaignId
+      message: 'Processamento concluido',
+      campaignId,
+      ...summary
     });
   } catch (error: any) {
     if (campaignId) {
