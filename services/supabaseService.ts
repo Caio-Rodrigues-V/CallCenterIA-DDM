@@ -401,6 +401,10 @@ export const supabaseService = {
     return data || [];
   },
 
+  async getCall(id: string): Promise<Call> {
+    return apiRequest<Call>(`/api/calls/${id}`);
+  },
+
   // --- SETTINGS (DB) ---
 
   async getSettingsFromDb(): Promise<Record<string, string>> {

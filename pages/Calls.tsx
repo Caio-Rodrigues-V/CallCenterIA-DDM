@@ -132,9 +132,23 @@ export const Calls: React.FC = () => {
   const kpiVoicemailRate = calls.length > 0 ? Math.round((voicemailCalls.length / calls.length) * 100) : 0;
 
 
-  const handleOpenDetails = (call: Call) => {
+  const handleOpenDetails = async (call: Call) => {
     setSelectedCall(call);
     setIsModalOpen(true);
+
+    try {
+      const freshCall = await supabaseService.getCall(call.id);
+      setSelectedCall({
+        ...call,
+        ...freshCall,
+        campaignName: freshCall.campaignName === 'Direta' ? call.campaignName : freshCall.campaignName,
+        clientName: freshCall.clientName === 'Desconhecido' ? call.clientName : freshCall.clientName,
+        cpf: freshCall.cpf === '-' ? call.cpf : freshCall.cpf,
+        phone: freshCall.phone === '-' ? call.phone : freshCall.phone
+      });
+    } catch (error) {
+      console.error('Erro ao buscar detalhes atualizados da ligacao:', error);
+    }
   };
 
   return (
