@@ -11,7 +11,7 @@ async function getVapiApiKey(): Promise<string | null> {
     .eq('setting_key', 'vapi_api_key')
     .limit(1)
     .maybeSingle();
-  return data?.setting_value || process.env.VAPI_API_KEY || null;
+  return data?.setting_value || process.env.VAPI_API_KEY || process.env.VITE_VAPI_API_KEY || null;
 }
 
 vapiRouter.get('/resources', async (_req, res) => {
@@ -36,8 +36,17 @@ vapiRouter.get('/resources', async (_req, res) => {
       })
     ]);
 
-    const assistantsJson: any = assistantsRes.ok ? await assistantsRes.json() : [];
-    const phonesJson: any = phonesRes.ok ? await phonesRes.json() : [];
+    if (!assistantsRes.ok || !phonesRes.ok) {
+      return res.status(502).json({
+        success: false,
+        error:
+          `Erro ao buscar recursos VAPI ` +
+          `(assistants=${assistantsRes.status}, phoneNumbers=${phonesRes.status})`
+      });
+    }
+
+    const assistantsJson: any = await assistantsRes.json();
+    const phonesJson: any = await phonesRes.json();
 
     const assistants = Array.isArray(assistantsJson) ? assistantsJson : assistantsJson.results || [];
     const phoneNumbers = Array.isArray(phonesJson) ? phonesJson : phonesJson.results || [];
