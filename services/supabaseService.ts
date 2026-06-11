@@ -3,6 +3,92 @@ import { apiRequest } from '../lib/apiClient';
 import { getSupabaseSettings } from '../lib/settings';
 import { Campaign, Contact, Call, AcordoKpi } from '../types';
 
+const IMPORT_CHUNK_SIZE = 300;
+
+const chunkArray = <T,>(arr: T[], size: number): T[][] =>
+  Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, (i + 1) * size));
+
+async function importContactsDirectly(
+  campaignId: string,
+  contactsData: { nome: string; cpf: string; telefone: string; instituicao: string }[],
+  onProgress?: (percent: number, label: string) => void
+) {
+  const report = (percent: number, label: string) => onProgress?.(Math.round(percent), label);
+
+  report(5, 'Normalizando dados...');
+  const contactsPayload = contactsData.map((contact) => {
+    const cleanPhone = contact.telefone.replace(/\D/g, '');
+    const normalizedPhone =
+      cleanPhone.length === 12 || cleanPhone.length === 13 ? `+${cleanPhone}` : `+55${cleanPhone}`;
+
+    return {
+      nome: contact.nome || null,
+      cpf: contact.cpf.replace(/\D/g, ''),
+      instituicao: contact.instituicao || null,
+      telefone: normalizedPhone
+    };
+  });
+
+  report(10, 'Verificando contatos existentes...');
+  const allPhones = contactsPayload.map((contact) => contact.telefone);
+  const phoneChunks = chunkArray(allPhones, IMPORT_CHUNK_SIZE);
+  const existingPhoneMap = new Map<string, string>();
+
+  for (let i = 0; i < phoneChunks.length; i++) {
+    const { data, error } = await supabase.from('contacts').select('id, telefone').in('telefone', phoneChunks[i]);
+    if (error) throw error;
+    data?.forEach((contact: any) => existingPhoneMap.set(contact.telefone, contact.id));
+    report(10 + ((i + 1) / Math.max(phoneChunks.length, 1)) * 25, `Verificando contatos (${i + 1}/${phoneChunks.length})...`);
+  }
+
+  const newContacts = contactsPayload.filter((contact) => !existingPhoneMap.has(contact.telefone));
+  const insertChunks = chunkArray(newContacts, IMPORT_CHUNK_SIZE);
+
+  for (let i = 0; i < insertChunks.length; i++) {
+    const { data, error } = await supabase.from('contacts').insert(insertChunks[i]).select('id, telefone');
+    if (error) throw error;
+    data?.forEach((contact: any) => existingPhoneMap.set(contact.telefone, contact.id));
+    report(35 + ((i + 1) / Math.max(insertChunks.length, 1)) * 35, `Inserindo contatos (${i + 1}/${insertChunks.length})...`);
+  }
+
+  if (insertChunks.length === 0) report(70, 'Nenhum contato novo para inserir.');
+
+  const processedIds = new Set<string>();
+  const campaignPayload: Array<{ campaign_id: string; contact_id: string; status: string; tentativas: number }> = [];
+
+  for (const contact of contactsPayload) {
+    const contactId = existingPhoneMap.get(contact.telefone);
+    if (contactId && !processedIds.has(contactId)) {
+      campaignPayload.push({ campaign_id: campaignId, contact_id: contactId, status: 'pendente', tentativas: 0 });
+      processedIds.add(contactId);
+    }
+  }
+
+  const linkChunks = chunkArray(campaignPayload, IMPORT_CHUNK_SIZE);
+  for (let i = 0; i < linkChunks.length; i++) {
+    const { error: upsertErr } = await supabase
+      .from('campaign_contacts')
+      .upsert(linkChunks[i], { onConflict: 'campaign_id,contact_id', ignoreDuplicates: true });
+
+    if (upsertErr) {
+      const { error: insertErr } = await supabase.from('campaign_contacts').insert(linkChunks[i]);
+      if (insertErr && !insertErr.message.includes('duplicate')) throw insertErr;
+    }
+
+    report(70 + ((i + 1) / Math.max(linkChunks.length, 1)) * 30, `Vinculando contatos (${i + 1}/${linkChunks.length})...`);
+  }
+
+  report(100, 'Importacao concluida.');
+
+  return {
+    success: true,
+    totalRecebidos: contactsData.length,
+    novosInseridos: newContacts.length,
+    vinculados: campaignPayload.length,
+    fallback: 'supabase-client'
+  };
+}
+
 export const supabaseService = {
 
   // --- CAMPAIGNS ---
@@ -317,13 +403,23 @@ export const supabaseService = {
 
     onProgress?.(5, 'Enviando dados para processamento...');
 
-    const data = await apiRequest<any>('/api/contacts/import', {
-      method: 'POST',
-      body: JSON.stringify({
-        campaignId,
-        contacts: contactsData
-      })
-    });
+    let data: any;
+    try {
+      data = await apiRequest<any>('/api/contacts/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          campaignId,
+          contacts: contactsData
+        })
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (!message.includes('404')) throw error;
+
+      console.warn('[contacts/import] endpoint /api/contacts/import retornou 404; usando fallback Supabase client.');
+      onProgress?.(10, 'Endpoint indisponivel. Importando direto pelo Supabase...');
+      data = await importContactsDirectly(campaignId, contactsData, onProgress);
+    }
 
     onProgress?.(100, 'ImportaÃ§Ã£o concluÃ­da.');
 
