@@ -9,8 +9,23 @@ const getEnv = (key: string) => {
   }
 };
 
+const isLocalApiUrl = (url: string): boolean => {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+  } catch {
+    return false;
+  }
+};
+
 export const getApiBaseUrl = (): string => {
   const envUrl = getEnv('VITE_API_BASE_URL');
+  const isProd = getEnv('PROD') === true || getEnv('MODE') === 'production';
+
+  if (isProd && envUrl && isLocalApiUrl(envUrl)) {
+    return DEFAULT_API_BASE_URL;
+  }
+
   return (envUrl || DEFAULT_API_BASE_URL).replace(/\/$/, '');
 };
 
