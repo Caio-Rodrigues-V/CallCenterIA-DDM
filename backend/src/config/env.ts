@@ -16,23 +16,6 @@ for (const envFile of candidates) {
   }
 }
 
-const requiredVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
-const missingVars = requiredVars.filter((name) => !process.env[name]);
-
-if (missingVars.length > 0) {
-  const checkedFiles = candidates.join(', ');
-
-  throw new Error(
-    `Missing required env vars: ${missingVars.join(', ')}. ` +
-      `Preencha esses valores em .env (raiz do projeto ou backend/.env). ` +
-      `Arquivos verificados: ${checkedFiles}`
-  );
-}
-
-function required(name: (typeof requiredVars)[number]): string {
-  return process.env[name]!;
-}
-
 function nonNegativeInt(name: string, fallback: number): number {
   const rawValue = process.env[name];
   if (!rawValue) return fallback;
@@ -75,19 +58,25 @@ function assertValidSupabaseKey(name: string, value: string, expected: 'service'
   );
 }
 
-assertValidSupabaseKey('SUPABASE_SERVICE_ROLE_KEY', required('SUPABASE_SERVICE_ROLE_KEY'), 'service');
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-if (process.env.SUPABASE_ANON_KEY) {
-  assertValidSupabaseKey('SUPABASE_ANON_KEY', process.env.SUPABASE_ANON_KEY, 'anon');
+if (supabaseServiceRoleKey) {
+  assertValidSupabaseKey('SUPABASE_SERVICE_ROLE_KEY', supabaseServiceRoleKey, 'service');
+}
+
+if (supabaseAnonKey) {
+  assertValidSupabaseKey('SUPABASE_ANON_KEY', supabaseAnonKey, 'anon');
 }
 
 export const env = {
   port: Number(process.env.PORT || 4000),
   frontendOrigin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
   backendPublicUrl: process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 4000}`,
-  supabaseUrl: required('SUPABASE_URL'),
-  supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
-  supabaseServiceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
+  supabaseUrl,
+  supabaseAnonKey,
+  supabaseServiceRoleKey,
   redisUrl: process.env.REDIS_URL || '',
   rabbitmqUrl: process.env.RABBITMQ_URL || '',
   rabbitmqCallDispatchQueue: process.env.RABBITMQ_CALL_DISPATCH_QUEUE || 'call.dispatch',

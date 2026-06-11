@@ -24,6 +24,7 @@ export const Campaigns: React.FC = () => {
   const [assistants, setAssistants] = useState<VapiAssistant[]>([]);
   const [phoneNumbers, setPhoneNumbers] = useState<VapiPhoneNumber[]>([]);
   const [loadingVapi, setLoadingVapi] = useState(false);
+  const [vapiError, setVapiError] = useState<string | null>(null);
 
   // Campaign Form State
   const initialFormState = {
@@ -58,15 +59,17 @@ export const Campaigns: React.FC = () => {
 
   const fetchVapiData = async () => {
     setLoadingVapi(true);
+    setVapiError(null);
     try {
-      const [assists, phones] = await Promise.all([
-        vapiService.getAssistants(),
-        vapiService.getPhoneNumbers()
-      ]);
-      setAssistants(assists);
-      setPhoneNumbers(phones);
+      const data = await vapiService.getResources();
+      setAssistants(Array.isArray(data.assistants) ? data.assistants : []);
+      setPhoneNumbers(Array.isArray(data.phoneNumbers) ? data.phoneNumbers : []);
     } catch (error) {
       console.error(error);
+      const message = error instanceof Error ? error.message : 'Erro ao carregar recursos VAPI.';
+      setAssistants([]);
+      setPhoneNumbers([]);
+      setVapiError(message);
     } finally {
       setLoadingVapi(false);
     }
@@ -88,6 +91,7 @@ export const Campaigns: React.FC = () => {
   const openCreateModal = () => {
     setEditingId(null);
     setFormData(initialFormState);
+    setVapiError(null);
     setIsModalOpen(true);
   };
 
@@ -436,6 +440,12 @@ export const Campaigns: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {formData.type === 'VAPI' && vapiError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+              {vapiError}
             </div>
           )}
 

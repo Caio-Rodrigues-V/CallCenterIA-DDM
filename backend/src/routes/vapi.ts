@@ -1,17 +1,33 @@
 import { Router } from 'express';
 import { cacheGet, cacheSet } from '../lib/cache.js';
-import { supabaseAdmin } from '../lib/supabase.js';
+import { hasSupabaseAdminConfig, supabaseAdmin } from '../lib/supabase.js';
 
 export const vapiRouter = Router();
 
 async function getVapiApiKey(): Promise<string | null> {
-  const { data } = await supabaseAdmin
-    .from('app_settings')
-    .select('setting_value')
-    .eq('setting_key', 'vapi_api_key')
-    .limit(1)
-    .maybeSingle();
-  return data?.setting_value || process.env.VAPI_API_KEY || process.env.VITE_VAPI_API_KEY || null;
+  const envApiKey = process.env.VAPI_API_KEY || process.env.VITE_VAPI_API_KEY;
+  if (envApiKey) return envApiKey;
+
+  if (!hasSupabaseAdminConfig()) return null;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('app_settings')
+      .select('setting_value')
+      .eq('setting_key', 'vapi_api_key')
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[vapi/resources] app_settings error', error);
+      return null;
+    }
+
+    return data?.setting_value || null;
+  } catch (error) {
+    console.error('[vapi/resources] app_settings unavailable', error);
+    return null;
+  }
 }
 
 vapiRouter.get('/resources', async (_req, res) => {
