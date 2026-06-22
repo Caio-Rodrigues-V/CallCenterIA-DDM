@@ -1,0 +1,47 @@
+import { Worker } from 'bullmq'
+import { redis } from '../lib/redis.js'
+import { VapiDispatcher } from '../services/VapiDispatcher.js'
+import { CampaignRepository } from '../repositories/CampaignRepository.js'
+import { CALL_QUEUE_NAME, CallJobData } from './callQueue.js'
+import { env } from '../config/env.js'
+
+const campaignRepository = new CampaignRepository()
+const vapiDispatcher = new VapiDispatcher()
+
+const worker = new Worker<CallJobData>(
+  CALL_QUEUE_NAME,
+  async (job) => {
+    const { data } = job
+
+    console.log(`[worker] processando job ${job.id} — contato ${data.contactId}`)
+
+    const result = await vapiDispatcher.dispatch(data)
+
+    if (!result.success) {
+      throw new Error(`Dispatch falhou: ${result.error} (HTTP ${result.statusCode})`)
+    }
+
+    await campaignRepository.markContactAsInProgress(
+      data.campaignContactId,
+      data.attemptNumber
+    )
+
+    console.log(`[worker] job ${job.id} concluído com sucesso`)
+  },
+  {
+    connection: redis,
+    concurrency: env.campaignMaxConcurrency,
+  }
+)
+
+worker.on('failed', (job, error) => {
+  console.error(`[worker] job ${job?.id} falhou:`, error.message)
+})
+
+worker.on('error', (error) => {
+  console.error('[worker] erro no worker:', error.message)
+})
+
+console.log(`[worker] iniciado — fila: ${CALL_QUEUE_NAME} — concorrência: ${env.campaignMaxConcurrency}`)
+
+export { worker }

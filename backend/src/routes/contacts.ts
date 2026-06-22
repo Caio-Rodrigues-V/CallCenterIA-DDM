@@ -1,23 +1,27 @@
-import { Router } from 'express';
-import { importContactsForCampaign } from '../services/contactImport.js';
+import { Router } from 'express'
+import { ContactImporter } from '../services/ContactImporter.js'
+import { ContactRepository } from '../repositories/ContactRepository.js'
+import { AppError } from '../errors/AppError.js'
 
-export const contactsRouter = Router();
+const router = Router()
+const contactImporter = new ContactImporter(new ContactRepository())
 
-contactsRouter.post('/import', async (req, res) => {
+router.post('/import', async (req, res, next) => {
+  const { campaignId, contacts } = req.body as {
+    campaignId?: string
+    contacts?: Array<{ nome?: string; cpf?: string; telefone?: string; instituicao?: string }>
+  }
+
   try {
-    const { campaignId, contacts } = req.body as {
-      campaignId?: string;
-      contacts?: Array<{ nome?: string; cpf?: string; telefone?: string; instituicao?: string }>;
-    };
-
     if (!campaignId || !Array.isArray(contacts)) {
-      return res.status(400).json({ success: false, error: 'Payload invalido' });
+      throw AppError.badRequest('campaignId e contacts são obrigatórios')
     }
 
-    const result = await importContactsForCampaign(campaignId, contacts);
-    return res.json(result);
-  } catch (error: any) {
-    console.error('[contacts/import] error', error);
-    return res.status(500).json({ success: false, error: error.message || 'Erro interno' });
+    const result = await contactImporter.importForCampaign(campaignId, contacts)
+    res.json({ success: true, ...result })
+  } catch (error) {
+    next(error)
   }
-});
+})
+
+export { router as contactsRouter }
