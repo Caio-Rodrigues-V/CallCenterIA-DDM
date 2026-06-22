@@ -7,7 +7,7 @@ import {
   ContactStatus,
   LIMITS,
 } from '../constants/index.js'
-
+import { Logger } from './Logger.js'
 interface VapiCallbackPayload {
   type: string
   call?: Record<string, unknown>
@@ -34,6 +34,7 @@ export class WebhookProcessor {
     const existingCall = await this.findOrCreateCallRecord(vapiCallId, metadata)
     const callData = this.extractCallData(call, metadata, payload as unknown as Record<string, unknown>)    
     await this.callRepository.update(existingCall.id, callData)
+    await Logger.success('Webhook', 'Callback VAPI processado', { callId: existingCall.id })
     await this.updateCampaignContactStatus(existingCall, call, callData)
 
     return { callId: existingCall.id }

@@ -3,10 +3,10 @@ import { CampaignRepository } from '../repositories/CampaignRepository.js'
 import { callQueue } from '../queues/callQueue.js'
 import { env } from '../config/env.js'
 import { AppError } from '../errors/AppError.js'
+import { Logger } from '../services/Logger.js'
 
 const router = Router()
 const campaignRepository = new CampaignRepository()
-
 const activeCampaignRuns = new Set<string>()
 
 router.get('/', async (_req, res, next) => {
@@ -69,6 +69,11 @@ router.post('/start', async (req, res, next) => {
 
     await callQueue.addBulk(jobs)
 
+    await Logger.success('Campaign', `Campanha ${campaignId} enfileirada`, {
+      campaignId,
+      totalEnqueued: jobs.length,
+    })
+
     activeCampaignRuns.delete(campaignId)
 
     res.json({
@@ -78,6 +83,12 @@ router.post('/start', async (req, res, next) => {
     })
   } catch (error) {
     activeCampaignRuns.delete(campaignId ?? '')
+
+    await Logger.error('Campaign', `Erro ao iniciar campanha ${campaignId ?? 'desconhecida'}`, {
+      campaignId,
+      error: (error as Error).message,
+    })
+
     next(error)
   }
 })

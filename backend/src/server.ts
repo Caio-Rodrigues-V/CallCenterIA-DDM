@@ -9,6 +9,7 @@ import { callsRouter } from './routes/calls.js'
 import { contactsRouter } from './routes/contacts.js'
 import { webhooksRouter } from './routes/webhooks.js'
 import { AppError } from './errors/AppError.js'
+import { logsRouter } from './routes/logs.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
