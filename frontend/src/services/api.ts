@@ -1,57 +1,57 @@
-import { Contact } from '../types';
-import { apiRequest } from '../lib/apiClient';
-import { logService } from './logService';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
-export const campaignService = {
-  async startCampaign(campaignId: string, campaignName: string): Promise<{ success: boolean }> {
-    const msg = `Iniciando campanha via Backend: ${campaignName} (ID: ${campaignId})`;
-    console.log(msg);
-    await logService.addLog('info', 'Campaign', msg);
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = `${API_BASE_URL}${path}`
 
-    try {
-      const data = await apiRequest<{ success: boolean; error?: string }>('/api/campaigns/start', {
-        method: 'POST',
-        body: JSON.stringify({ campaignId })
-      });
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+    ...init,
+  })
 
-      const successMsg = 'Comando enviado com sucesso. O backend iniciou o processamento em background.';
-      console.log(successMsg, data);
-      await logService.addLog('success', 'Campaign', successMsg, data);
-      return { success: true };
-    } catch (e: any) {
-      const errText = `Falha critica ao iniciar campanha: ${e.message}`;
-      console.error(errText, e);
-      alert(`Erro ao iniciar campanha no servidor:\n${e.message}`);
-      await logService.addLog('error', 'Campaign', errText, { rawError: e });
-      throw e;
-    }
-  },
+  const payload = await response.json().catch(() => ({}))
 
-  async callSingleContact(contact: Contact): Promise<void> {
-    const msg = `Solicitando chamada individual para: ${contact.name}`;
-    console.log(msg);
-    await logService.addLog('info', 'Call', msg);
-
-    try {
-      const body = {
-        contactId: contact.contactId,
-        campaignContactId: contact.id,
-        campaignId: contact.campaignId,
-        customerNumber: contact.phone,
-        customerName: contact.name,
-        customerCpf: contact.cpf
-      };
-
-      const data = await apiRequest<{ success: boolean; error?: string }>('/api/calls/initiate', {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
-
-      await logService.addLog('success', 'Call', 'Chamada individual solicitada com sucesso.', data);
-    } catch (e: any) {
-      alert(`Erro ao iniciar ligacao:\n${e.message}`);
-      await logService.addLog('error', 'Call', `Falha ao solicitar chamada individual: ${e.message}`, { rawError: e });
-      throw e;
-    }
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error ?? `Erro HTTP ${response.status}`)
   }
-};
+
+  return payload as T
+}
+
+export const campaignApi = {
+  getAll: () =>
+    request<any[]>('/api/campaigns'),
+
+  start: (campaignId: string) =>
+    request<{ success: boolean; totalEnqueued: number }>('/api/campaigns/start', {
+      method: 'POST',
+      body: JSON.stringify({ campaignId }),
+    }),
+
+  toggle: (campaignId: string, active: boolean) =>
+    request<{ success: boolean }>(`/api/campaigns/${campaignId}/toggle`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active }),
+    }),
+}
+
+export const callApi = {
+  getAll: () =>
+    request<any[]>('/api/calls'),
+
+  getById: (id: string) =>
+    request<any>(`/api/calls/${id}`),
+}
+
+export const contactApi = {
+  import: (campaignId: string, contacts: any[]) =>
+    request<{ success: boolean; totalReceived: number; newContacts: number; linked: number }>(
+      '/api/contacts/import',
+      {
+        method: 'POST',
+        body: JSON.stringify({ campaignId, contacts }),
+      }
+    ),
+}
