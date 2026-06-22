@@ -1,32 +1,30 @@
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
-COPY . .
+COPY frontend/ .
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_N8N_WEBHOOK_VAPI
-ARG VITE_N8N_WEBHOOK_WHATSAPP
+ARG VITE_API_BASE_URL
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
-ENV VITE_N8N_WEBHOOK_VAPI=$VITE_N8N_WEBHOOK_VAPI
-ENV VITE_N8N_WEBHOOK_WHATSAPP=$VITE_N8N_WEBHOOK_WHATSAPP
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
 FROM node:20-alpine AS backend-build
 WORKDIR /app
-COPY backend/package*.json ./backend/
-RUN npm --prefix backend ci
-COPY backend ./backend
-RUN npm --prefix backend run build
+COPY backend/package*.json ./
+RUN npm ci
+COPY backend/ .
+RUN npm run build
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
-COPY backend/package*.json ./backend/
-RUN npm --prefix backend ci --omit=dev
-COPY --from=backend-build /app/backend/dist ./backend/dist
-COPY --from=frontend-build /app/dist ./backend/public
+COPY backend/package*.json ./
+RUN npm ci --omit=dev
+COPY --from=backend-build /app/dist ./dist
+COPY --from=frontend-build /app/dist ./public
 EXPOSE 4000
-CMD ["node", "backend/dist/server.js"]
+CMD ["node", "dist/server.js"]
