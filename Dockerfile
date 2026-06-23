@@ -28,3 +28,5 @@ COPY --from=frontend-build /app/dist ./public
 COPY prisma ./prisma
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+
+# cache bust 20260623163702
