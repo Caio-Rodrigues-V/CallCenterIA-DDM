@@ -2,7 +2,6 @@
 import { prisma } from '../lib/prisma.js'
 import { AppError } from '../errors/AppError.js'
 import { LIMITS } from '../constants/index.js'
-import type { Prisma } from '@prisma/client'
 
 export interface CallRow {
   id: string
@@ -21,7 +20,7 @@ export interface CallRow {
   transcript: string | null
   recording_url: string | null
   summary: string | null
-  metadata_raw: Prisma.JsonValue | null
+  metadata_raw: unknown | null
 }
 
 export interface CreateCallInput {
@@ -62,11 +61,10 @@ export class CallRepository {
     vapiCallId: string,
   ): Promise<{ id: string; campaign_contact_id: string | null } | null> {
     try {
-      const call = await prisma.call.findUnique({
+      return await prisma.call.findUnique({
         where: { vapi_call_id: vapiCallId },
         select: { id: true, campaign_contact_id: true },
       })
-      return call
     } catch (error) {
       throw AppError.internal('Erro ao buscar chamada por vapi_call_id', error, { vapiCallId })
     }
@@ -76,7 +74,7 @@ export class CallRepository {
     campaignContactId: string,
   ): Promise<{ id: string; campaign_contact_id: string | null } | null> {
     try {
-      const call = await prisma.call.findFirst({
+      return await prisma.call.findFirst({
         where: {
           campaign_contact_id: campaignContactId,
           vapi_call_id: null,
@@ -86,7 +84,6 @@ export class CallRepository {
         orderBy: { created_at: 'desc' },
         select: { id: true, campaign_contact_id: true },
       })
-      return call
     } catch (error) {
       throw AppError.internal('Erro ao buscar chamada órfã', error, { campaignContactId })
     }
@@ -96,7 +93,7 @@ export class CallRepository {
     input: CreateCallInput,
   ): Promise<{ id: string; campaign_contact_id: string | null }> {
     try {
-      const call = await prisma.call.create({
+      return await prisma.call.create({
         data: {
           vapi_call_id: input.vapiCallId ?? null,
           campaign_contact_id: input.campaignContactId ?? null,
@@ -104,39 +101,38 @@ export class CallRepository {
         },
         select: { id: true, campaign_contact_id: true },
       })
-      return call
     } catch (error) {
       throw AppError.internal('Erro ao criar registro de chamada', error)
     }
   }
 
   async update(callId: string, input: UpdateCallInput): Promise<void> {
-    const data: Prisma.CallUpdateInput = {}
+    const data: Record<string, unknown> = {}
 
-    if (input.vapiCallId !== undefined)          data.vapi_call_id = input.vapiCallId
-    if (input.campaignContactId !== undefined)   data.campaign_contact_id = input.campaignContactId
-    if (input.startedAt !== undefined)           data.started_at = new Date(input.startedAt)
-    if (input.endedAt !== undefined)             data.ended_at = new Date(input.endedAt)
-    if (input.endedReason !== undefined)         data.ended_reason = input.endedReason
-    if (input.durationSeconds !== undefined)     data.duration_seconds = input.durationSeconds
-    if (input.custoTotal !== undefined)          data.custo_total = input.custoTotal
-    if (input.custoStt !== undefined)            data.custo_stt = input.custoStt
-    if (input.custoTts !== undefined)            data.custo_tts = input.custoTts
-    if (input.custoVapi !== undefined)           data.custo_vapi = input.custoVapi
-    if (input.summary !== undefined)             data.summary = input.summary
-    if (input.successEvaluation !== undefined)   data.success_evaluation = input.successEvaluation
-    if (input.transcript !== undefined)          data.transcript = input.transcript
-    if (input.recordingUrl !== undefined)        data.recording_url = input.recordingUrl
-    if (input.stereoRecordingUrl !== undefined)  data.stereo_recording_url = input.stereoRecordingUrl
-    if (input.assistantId !== undefined)         data.assistant_id = input.assistantId
-    if (input.phoneNumberId !== undefined)       data.phone_number_id = input.phoneNumberId
-    if (input.structuredName !== undefined)      data.structured_name = input.structuredName
+    if (input.vapiCallId !== undefined)           data.vapi_call_id = input.vapiCallId
+    if (input.campaignContactId !== undefined)    data.campaign_contact_id = input.campaignContactId
+    if (input.startedAt !== undefined)            data.started_at = new Date(input.startedAt)
+    if (input.endedAt !== undefined)              data.ended_at = new Date(input.endedAt)
+    if (input.endedReason !== undefined)          data.ended_reason = input.endedReason
+    if (input.durationSeconds !== undefined)      data.duration_seconds = input.durationSeconds
+    if (input.custoTotal !== undefined)           data.custo_total = input.custoTotal
+    if (input.custoStt !== undefined)             data.custo_stt = input.custoStt
+    if (input.custoTts !== undefined)             data.custo_tts = input.custoTts
+    if (input.custoVapi !== undefined)            data.custo_vapi = input.custoVapi
+    if (input.summary !== undefined)              data.summary = input.summary
+    if (input.successEvaluation !== undefined)    data.success_evaluation = input.successEvaluation
+    if (input.transcript !== undefined)           data.transcript = input.transcript
+    if (input.recordingUrl !== undefined)         data.recording_url = input.recordingUrl
+    if (input.stereoRecordingUrl !== undefined)   data.stereo_recording_url = input.stereoRecordingUrl
+    if (input.assistantId !== undefined)          data.assistant_id = input.assistantId
+    if (input.phoneNumberId !== undefined)        data.phone_number_id = input.phoneNumberId
+    if (input.structuredName !== undefined)       data.structured_name = input.structuredName
     if (input.structuredRatingLabel !== undefined) data.structured_rating_label = input.structuredRatingLabel
     if (input.structuredRatingText !== undefined)  data.structured_rating_text = input.structuredRatingText
-    if (input.structuredPurpose !== undefined)   data.structured_purpose = input.structuredPurpose
+    if (input.structuredPurpose !== undefined)    data.structured_purpose = input.structuredPurpose
     if (input.structuredMainPoints !== undefined) data.structured_main_points = input.structuredMainPoints
-    if (input.metadataRaw !== undefined)         data.metadata_raw = input.metadataRaw
-    if (input.status !== undefined)              data.status = input.status
+    if (input.metadataRaw !== undefined)          data.metadata_raw = input.metadataRaw
+    if (input.status !== undefined)               data.status = input.status
 
     try {
       await prisma.call.update({ where: { id: callId }, data })

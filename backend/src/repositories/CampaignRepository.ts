@@ -36,9 +36,7 @@ export interface CampaignContactRow {
 export class CampaignRepository {
   async findById(campaignId: string): Promise<CampaignRow> {
     try {
-      const campaign = await prisma.campaign.findUnique({
-        where: { id: campaignId },
-      })
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } })
       if (!campaign) throw AppError.notFound('Campanha não encontrada', { campaignId })
       return campaign as unknown as CampaignRow
     } catch (error) {
@@ -49,9 +47,7 @@ export class CampaignRepository {
 
   async findAll(): Promise<CampaignRow[]> {
     try {
-      const campaigns = await prisma.campaign.findMany({
-        orderBy: { created_at: 'desc' },
-      })
+      const campaigns = await prisma.campaign.findMany({ orderBy: { created_at: 'desc' } })
       return campaigns as unknown as CampaignRow[]
     } catch (error) {
       throw AppError.internal('Erro ao buscar campanhas', error)
@@ -60,9 +56,7 @@ export class CampaignRepository {
 
   async countContactsByStatus(campaignId: string, status: string): Promise<number> {
     try {
-      return await prisma.campaignContact.count({
-        where: { campaign_id: campaignId, status },
-      })
+      return await prisma.campaignContact.count({ where: { campaign_id: campaignId, status } })
     } catch (error) {
       throw AppError.internal('Erro ao contar contatos', error, { campaignId, status })
     }
@@ -79,13 +73,7 @@ export class CampaignRepository {
           ultima_tentativa: true,
           status: true,
           contact: {
-            select: {
-              id: true,
-              nome: true,
-              cpf: true,
-              telefone: true,
-              instituicao: true,
-            },
+            select: { id: true, nome: true, cpf: true, telefone: true, instituicao: true },
           },
         },
       })
@@ -95,10 +83,7 @@ export class CampaignRepository {
     }
   }
 
-  async markContactAsInProgress(
-    campaignContactId: string,
-    currentAttempts: number,
-  ): Promise<void> {
+  async markContactAsInProgress(campaignContactId: string, currentAttempts: number): Promise<void> {
     try {
       await prisma.campaignContact.update({
         where: { id: campaignContactId },
@@ -120,21 +105,36 @@ export class CampaignRepository {
         data: { status, ultima_tentativa: new Date() },
       })
     } catch (error) {
-      throw AppError.internal('Erro ao atualizar status do contato', error, {
-        campaignContactId,
-        status,
-      })
+      throw AppError.internal('Erro ao atualizar status do contato', error, { campaignContactId, status })
     }
   }
 
   async toggleActive(campaignId: string, isActive: boolean): Promise<void> {
     try {
-      await prisma.campaign.update({
-        where: { id: campaignId },
-        data: { ativa: isActive },
-      })
+      await prisma.campaign.update({ where: { id: campaignId }, data: { ativa: isActive } })
     } catch (error) {
       throw AppError.internal('Erro ao atualizar status da campanha', error, { campaignId })
+    }
+  }
+
+  async findByCampaignContactId(
+    campaignContactId: string,
+  ): Promise<{ tentativas_realizadas: number; max_tentativas: number } | null> {
+    try {
+      const cc = await prisma.campaignContact.findUnique({
+        where: { id: campaignContactId },
+        select: {
+          tentativas_realizadas: true,
+          campaign: { select: { max_tentativas: true } },
+        },
+      })
+      if (!cc) return null
+      return {
+        tentativas_realizadas: cc.tentativas_realizadas,
+        max_tentativas: cc.campaign.max_tentativas,
+      }
+    } catch (error) {
+      throw AppError.internal('Erro ao buscar campaign contact', error, { campaignContactId })
     }
   }
 }

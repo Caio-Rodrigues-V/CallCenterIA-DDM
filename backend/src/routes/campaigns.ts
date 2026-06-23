@@ -23,9 +23,7 @@ router.post('/start', async (req, res, next) => {
   const { campaignId } = req.body as { campaignId?: string }
 
   try {
-    if (!campaignId) {
-      throw AppError.badRequest('campaignId é obrigatório')
-    }
+    if (!campaignId) throw AppError.badRequest('campaignId é obrigatório')
 
     if (activeCampaignRuns.has(campaignId)) {
       throw new AppError('Já existe uma execução em andamento para esta campanha', { statusCode: 409 })
@@ -35,9 +33,7 @@ router.post('/start', async (req, res, next) => {
 
     const campaign = await campaignRepository.findById(campaignId)
 
-    if (!campaign.ativa) {
-      throw AppError.badRequest('Campanha não está ativa')
-    }
+    if (!campaign.ativa) throw AppError.badRequest('Campanha não está ativa')
 
     const eligibleContacts = await campaignRepository.findEligibleContacts(campaignId)
     const callbackUrl = `${env.backendPublicUrl}/api/webhooks/vapi/callback`
@@ -48,7 +44,6 @@ router.post('/start', async (req, res, next) => {
       .filter(Boolean)
 
     const jobs = eligibleContacts.map((cc, index) => {
-      // "contact" singular — alinhado com o schema Prisma e CampaignRepository
       const contact = cc.contact
       const phoneNumberId = vapiLines[index % vapiLines.length]
 
@@ -59,7 +54,7 @@ router.post('/start', async (req, res, next) => {
           campaignContactId: cc.id,
           campaignId,
           customerNumber: contact.telefone,
-          customerName: contact.nome,
+          customerName: contact.nome ?? '',   // null → string vazia para satisfazer CallJobData
           customerCpf: contact.cpf,
           assistantId: campaign.assistant_vapi_id,
           phoneNumberId,
@@ -78,11 +73,7 @@ router.post('/start', async (req, res, next) => {
 
     activeCampaignRuns.delete(campaignId)
 
-    res.json({
-      success: true,
-      message: 'Campanha enfileirada',
-      totalEnqueued: jobs.length,
-    })
+    res.json({ success: true, message: 'Campanha enfileirada', totalEnqueued: jobs.length })
   } catch (error) {
     activeCampaignRuns.delete(campaignId ?? '')
 

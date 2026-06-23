@@ -21,7 +21,7 @@ export class ContactRepository {
           where: { telefone: { in: chunk } },
           select: { id: true, telefone: true },
         })
-        contacts.forEach(c => phoneMap.set(c.telefone, c.id))
+        contacts.forEach((c: { id: string; telefone: string }) => phoneMap.set(c.telefone, c.id))
       } catch (error) {
         throw AppError.internal('Erro ao buscar contatos existentes', error)
       }
@@ -36,18 +36,13 @@ export class ContactRepository {
 
     for (const chunk of chunks) {
       try {
-        // skipDuplicates evita erro em corridas concorrentes — comportamento idêntico ao upsert anterior
-        await prisma.contact.createMany({
-          data: chunk,
-          skipDuplicates: true,
-        })
+        await prisma.contact.createMany({ data: chunk, skipDuplicates: true })
 
-        // Busca os IDs dos recém-inseridos (ou já existentes com o mesmo telefone)
         const inserted = await prisma.contact.findMany({
-          where: { telefone: { in: chunk.map(c => c.telefone) } },
+          where: { telefone: { in: chunk.map((c: ContactInput) => c.telefone) } },
           select: { id: true, telefone: true },
         })
-        inserted.forEach(c => phoneMap.set(c.telefone, c.id))
+        inserted.forEach((c: { id: string; telefone: string }) => phoneMap.set(c.telefone, c.id))
       } catch (error) {
         throw AppError.internal('Erro ao inserir contatos', error)
       }
@@ -68,10 +63,7 @@ export class ContactRepository {
 
     for (const chunk of chunks) {
       try {
-        await prisma.campaignContact.createMany({
-          data: chunk,
-          skipDuplicates: true, // unique([campaign_id, contact_id]) no schema
-        })
+        await prisma.campaignContact.createMany({ data: chunk, skipDuplicates: true })
       } catch (error) {
         throw AppError.internal('Erro ao vincular contatos à campanha', error, { campaignId })
       }
