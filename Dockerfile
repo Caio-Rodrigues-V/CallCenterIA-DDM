@@ -1,3 +1,4 @@
+@'
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
 COPY frontend/package*.json ./
@@ -12,8 +13,9 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci
 COPY backend/ .
+COPY prisma ./prisma
 RUN npm run build
-RUN npx prisma generate
+RUN npx prisma generate --schema ./prisma/schema.prisma
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
@@ -28,5 +30,4 @@ COPY --from=frontend-build /app/dist ./public
 COPY prisma ./prisma
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
-
-# cache bust 20260623163702
+'@ | Set-Content Dockerfile
