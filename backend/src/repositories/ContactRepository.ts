@@ -1,4 +1,5 @@
-import { supabaseAdmin } from '../lib/supabase.js'
+// backend/src/repositories/ContactRepository.ts
+import { prisma } from '../lib/prisma.js'
 import { AppError } from '../errors/AppError.js'
 import { LIMITS } from '../constants/index.js'
 
@@ -12,22 +13,18 @@ export interface ContactInput {
 export class ContactRepository {
   async findExistingByPhones(phones: string[]): Promise<Map<string, string>> {
     const phoneMap = new Map<string, string>()
-
     const chunks = this.chunkArray(phones, LIMITS.MAX_CONTACTS_PER_IMPORT_CHUNK)
 
     for (const chunk of chunks) {
-      const { data, error } = await supabaseAdmin
-        .from('contacts')
-        .select('id, telefone')
-        .in('telefone', chunk)
-
-      if (error) {
+      try {
+        const contacts = await prisma.contact.findMany({
+          where: { telefone: { in: chunk } },
+          select: { id: true, telefone: true },
+        })
+        contacts.forEach(c => phoneMap.set(c.telefone, c.id))
+      } catch (error) {
         throw AppError.internal('Erro ao buscar contatos existentes', error)
       }
-
-      data?.forEach((contact: { id: string; telefone: string }) => {
-        phoneMap.set(contact.telefone, contact.id)
-      })
     }
 
     return phoneMap
@@ -38,18 +35,22 @@ export class ContactRepository {
     const chunks = this.chunkArray(contacts, LIMITS.MAX_CONTACTS_PER_IMPORT_CHUNK)
 
     for (const chunk of chunks) {
-      const { data, error } = await supabaseAdmin
-        .from('contacts')
-        .insert(chunk)
-        .select('id, telefone')
+      try {
+        // skipDuplicates evita erro em corridas concorrentes — comportamento idêntico ao upsert anterior
+        await prisma.contact.createMany({
+          data: chunk,
+          skipDuplicates: true,
+        })
 
-      if (error) {
+        // Busca os IDs dos recém-inseridos (ou já existentes com o mesmo telefone)
+        const inserted = await prisma.contact.findMany({
+          where: { telefone: { in: chunk.map(c => c.telefone) } },
+          select: { id: true, telefone: true },
+        })
+        inserted.forEach(c => phoneMap.set(c.telefone, c.id))
+      } catch (error) {
         throw AppError.internal('Erro ao inserir contatos', error)
       }
-
-      data?.forEach((contact: { id: string; telefone: string }) => {
-        phoneMap.set(contact.telefone, contact.id)
-      })
     }
 
     return phoneMap
@@ -60,17 +61,18 @@ export class ContactRepository {
       campaign_id: campaignId,
       contact_id: contactId,
       status: 'pendente',
-      tentativas: 0,
+      tentativas_realizadas: 0,
     }))
 
     const chunks = this.chunkArray(payload, LIMITS.MAX_CONTACTS_PER_IMPORT_CHUNK)
 
     for (const chunk of chunks) {
-      const { error } = await supabaseAdmin
-        .from('campaign_contacts')
-        .upsert(chunk, { onConflict: 'campaign_id,contact_id', ignoreDuplicates: true })
-
-      if (error) {
+      try {
+        await prisma.campaignContact.createMany({
+          data: chunk,
+          skipDuplicates: true, // unique([campaign_id, contact_id]) no schema
+        })
+      } catch (error) {
         throw AppError.internal('Erro ao vincular contatos à campanha', error, { campaignId })
       }
     }
@@ -79,7 +81,7 @@ export class ContactRepository {
   private chunkArray<T>(array: T[], size: number): T[][] {
     return Array.from(
       { length: Math.ceil(array.length / size) },
-      (_, index) => array.slice(index * size, (index + 1) * size)
+      (_, index) => array.slice(index * size, (index + 1) * size),
     )
   }
 }

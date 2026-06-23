@@ -1,14 +1,16 @@
-import { supabaseAdmin } from '../lib/supabase.js'
+// backend/src/repositories/CallRepository.ts
+import { prisma } from '../lib/prisma.js'
 import { AppError } from '../errors/AppError.js'
 import { LIMITS } from '../constants/index.js'
+import type { Prisma } from '@prisma/client'
 
 export interface CallRow {
   id: string
   vapi_call_id: string | null
   campaign_contact_id: string | null
   status: string
-  started_at: string | null
-  ended_at: string | null
+  started_at: Date | null
+  ended_at: Date | null
   ended_reason: string | null
   duration_seconds: number | null
   custo_total: number | null
@@ -19,7 +21,7 @@ export interface CallRow {
   transcript: string | null
   recording_url: string | null
   summary: string | null
-  metadata_raw: Record<string, unknown> | null
+  metadata_raw: Prisma.JsonValue | null
 }
 
 export interface CreateCallInput {
@@ -56,120 +58,113 @@ export interface UpdateCallInput {
 }
 
 export class CallRepository {
-  async findByVapiCallId(vapiCallId: string): Promise<{ id: string; campaign_contact_id: string | null } | null> {
-    const { data, error } = await supabaseAdmin
-      .from('calls')
-      .select('id, campaign_contact_id')
-      .eq('vapi_call_id', vapiCallId)
-      .maybeSingle()
-
-    if (error) {
+  async findByVapiCallId(
+    vapiCallId: string,
+  ): Promise<{ id: string; campaign_contact_id: string | null } | null> {
+    try {
+      const call = await prisma.call.findUnique({
+        where: { vapi_call_id: vapiCallId },
+        select: { id: true, campaign_contact_id: true },
+      })
+      return call
+    } catch (error) {
       throw AppError.internal('Erro ao buscar chamada por vapi_call_id', error, { vapiCallId })
     }
-
-    return data
   }
 
-  async findOrphanByCampaignContactId(campaignContactId: string): Promise<{ id: string; campaign_contact_id: string | null } | null> {
-    const { data, error } = await supabaseAdmin
-      .from('calls')
-      .select('id, campaign_contact_id')
-      .eq('campaign_contact_id', campaignContactId)
-      .is('vapi_call_id', null)
-      .is('started_at', null)
-      .is('metadata_raw', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) {
+  async findOrphanByCampaignContactId(
+    campaignContactId: string,
+  ): Promise<{ id: string; campaign_contact_id: string | null } | null> {
+    try {
+      const call = await prisma.call.findFirst({
+        where: {
+          campaign_contact_id: campaignContactId,
+          vapi_call_id: null,
+          started_at: null,
+          metadata_raw: null,
+        },
+        orderBy: { created_at: 'desc' },
+        select: { id: true, campaign_contact_id: true },
+      })
+      return call
+    } catch (error) {
       throw AppError.internal('Erro ao buscar chamada órfã', error, { campaignContactId })
     }
-
-    return data
   }
 
-  async create(input: CreateCallInput): Promise<{ id: string; campaign_contact_id: string | null }> {
-    const { data, error } = await supabaseAdmin
-      .from('calls')
-      .insert({
-        vapi_call_id: input.vapiCallId ?? null,
-        campaign_contact_id: input.campaignContactId ?? null,
-        status: input.status,
+  async create(
+    input: CreateCallInput,
+  ): Promise<{ id: string; campaign_contact_id: string | null }> {
+    try {
+      const call = await prisma.call.create({
+        data: {
+          vapi_call_id: input.vapiCallId ?? null,
+          campaign_contact_id: input.campaignContactId ?? null,
+          status: input.status,
+        },
+        select: { id: true, campaign_contact_id: true },
       })
-      .select('id, campaign_contact_id')
-      .maybeSingle()
-
-    if (error || !data) {
+      return call
+    } catch (error) {
       throw AppError.internal('Erro ao criar registro de chamada', error)
     }
-
-    return data
   }
 
   async update(callId: string, input: UpdateCallInput): Promise<void> {
-    const payload: Record<string, unknown> = {}
+    const data: Prisma.CallUpdateInput = {}
 
-    if (input.vapiCallId !== undefined) payload.vapi_call_id = input.vapiCallId
-    if (input.campaignContactId !== undefined) payload.campaign_contact_id = input.campaignContactId
-    if (input.startedAt !== undefined) payload.started_at = input.startedAt
-    if (input.endedAt !== undefined) payload.ended_at = input.endedAt
-    if (input.endedReason !== undefined) payload.ended_reason = input.endedReason
-    if (input.durationSeconds !== undefined) payload.duration_seconds = input.durationSeconds
-    if (input.custoTotal !== undefined) payload.custo_total = input.custoTotal
-    if (input.custoStt !== undefined) payload.custo_stt = input.custoStt
-    if (input.custoTts !== undefined) payload.custo_tts = input.custoTts
-    if (input.custoVapi !== undefined) payload.custo_vapi = input.custoVapi
-    if (input.summary !== undefined) payload.summary = input.summary
-    if (input.successEvaluation !== undefined) payload.success_evaluation = input.successEvaluation
-    if (input.transcript !== undefined) payload.transcript = input.transcript
-    if (input.recordingUrl !== undefined) payload.recording_url = input.recordingUrl
-    if (input.stereoRecordingUrl !== undefined) payload.stereo_recording_url = input.stereoRecordingUrl
-    if (input.assistantId !== undefined) payload.assistant_id = input.assistantId
-    if (input.phoneNumberId !== undefined) payload.phone_number_id = input.phoneNumberId
-    if (input.structuredName !== undefined) payload.structured_name = input.structuredName
-    if (input.structuredRatingLabel !== undefined) payload.structured_rating_label = input.structuredRatingLabel
-    if (input.structuredRatingText !== undefined) payload.structured_rating_text = input.structuredRatingText
-    if (input.structuredPurpose !== undefined) payload.structured_purpose = input.structuredPurpose
-    if (input.structuredMainPoints !== undefined) payload.structured_main_points = input.structuredMainPoints
-    if (input.metadataRaw !== undefined) payload.metadata_raw = input.metadataRaw
-    if (input.status !== undefined) payload.status = input.status
+    if (input.vapiCallId !== undefined)          data.vapi_call_id = input.vapiCallId
+    if (input.campaignContactId !== undefined)   data.campaign_contact_id = input.campaignContactId
+    if (input.startedAt !== undefined)           data.started_at = new Date(input.startedAt)
+    if (input.endedAt !== undefined)             data.ended_at = new Date(input.endedAt)
+    if (input.endedReason !== undefined)         data.ended_reason = input.endedReason
+    if (input.durationSeconds !== undefined)     data.duration_seconds = input.durationSeconds
+    if (input.custoTotal !== undefined)          data.custo_total = input.custoTotal
+    if (input.custoStt !== undefined)            data.custo_stt = input.custoStt
+    if (input.custoTts !== undefined)            data.custo_tts = input.custoTts
+    if (input.custoVapi !== undefined)           data.custo_vapi = input.custoVapi
+    if (input.summary !== undefined)             data.summary = input.summary
+    if (input.successEvaluation !== undefined)   data.success_evaluation = input.successEvaluation
+    if (input.transcript !== undefined)          data.transcript = input.transcript
+    if (input.recordingUrl !== undefined)        data.recording_url = input.recordingUrl
+    if (input.stereoRecordingUrl !== undefined)  data.stereo_recording_url = input.stereoRecordingUrl
+    if (input.assistantId !== undefined)         data.assistant_id = input.assistantId
+    if (input.phoneNumberId !== undefined)       data.phone_number_id = input.phoneNumberId
+    if (input.structuredName !== undefined)      data.structured_name = input.structuredName
+    if (input.structuredRatingLabel !== undefined) data.structured_rating_label = input.structuredRatingLabel
+    if (input.structuredRatingText !== undefined)  data.structured_rating_text = input.structuredRatingText
+    if (input.structuredPurpose !== undefined)   data.structured_purpose = input.structuredPurpose
+    if (input.structuredMainPoints !== undefined) data.structured_main_points = input.structuredMainPoints
+    if (input.metadataRaw !== undefined)         data.metadata_raw = input.metadataRaw
+    if (input.status !== undefined)              data.status = input.status
 
-    const { error } = await supabaseAdmin
-      .from('calls')
-      .update(payload)
-      .eq('id', callId)
-
-    if (error) {
+    try {
+      await prisma.call.update({ where: { id: callId }, data })
+    } catch (error) {
       throw AppError.internal('Erro ao atualizar chamada', error, { callId })
     }
   }
 
   async findMany(limit = LIMITS.MAX_CALLS_PER_QUERY): Promise<CallRow[]> {
-    const { data, error } = await supabaseAdmin
-      .from('calls')
-      .select('*')
-      .order('started_at', { ascending: false })
-      .limit(limit)
-
-    if (error) {
+    try {
+      const calls = await prisma.call.findMany({
+        orderBy: { started_at: 'desc' },
+        take: limit,
+      })
+      return calls as unknown as CallRow[]
+    } catch (error) {
       throw AppError.internal('Erro ao buscar chamadas', error)
     }
-
-    return (data ?? []) as CallRow[]
   }
 
   async findById(callId: string): Promise<CallRow> {
-    const { data, error } = await supabaseAdmin
-      .from('calls')
-      .select('*')
-      .eq('id', callId)
-      .maybeSingle()
-
-    if (error || !data) {
-      throw AppError.notFound('Chamada não encontrada', { callId })
+    try {
+      const call = await prisma.call.findUnique({ where: { id: callId } })
+      if (!call) throw AppError.notFound('Chamada não encontrada', { callId })
+      return call as unknown as CallRow
+    } catch (error) {
+      if (error instanceof AppError) throw error
+      throw AppError.internal('Erro ao buscar chamada', error, { callId })
     }
-
-    return data as CallRow
   }
 }

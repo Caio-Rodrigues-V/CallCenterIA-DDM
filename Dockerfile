@@ -3,11 +3,7 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ .
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_API_BASE_URL
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
@@ -17,6 +13,7 @@ COPY backend/package*.json ./
 RUN npm ci
 COPY backend/ .
 RUN npm run build
+RUN npx prisma generate
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
@@ -25,6 +22,9 @@ ENV PORT=4000
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 COPY --from=backend-build /app/dist ./dist
+COPY --from=backend-build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=backend-build /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=frontend-build /app/dist ./public
+COPY backend/prisma ./prisma
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]

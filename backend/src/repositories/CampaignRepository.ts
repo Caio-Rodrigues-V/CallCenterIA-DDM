@@ -1,4 +1,5 @@
-import { supabaseAdmin } from '../lib/supabase.js'
+// backend/src/repositories/CampaignRepository.ts
+import { prisma } from '../lib/prisma.js'
 import { AppError } from '../errors/AppError.js'
 
 export interface CampaignRow {
@@ -21,122 +22,118 @@ export interface CampaignContactRow {
   id: string
   contact_id: string
   tentativas_realizadas: number
-  ultima_tentativa: string | null
+  ultima_tentativa: Date | null
   status: string
-  contacts: {
+  contact: {
     id: string
-    nome: string
+    nome: string | null
     cpf: string
     telefone: string
-    instituicao: string
+    instituicao: string | null
   }
 }
 
 export class CampaignRepository {
   async findById(campaignId: string): Promise<CampaignRow> {
-    const { data, error } = await supabaseAdmin
-      .from('campaigns')
-      .select('*')
-      .eq('id', campaignId)
-      .single()
-
-    if (error || !data) {
-      throw AppError.notFound('Campanha não encontrada', { campaignId })
+    try {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+      })
+      if (!campaign) throw AppError.notFound('Campanha não encontrada', { campaignId })
+      return campaign as unknown as CampaignRow
+    } catch (error) {
+      if (error instanceof AppError) throw error
+      throw AppError.internal('Erro ao buscar campanha', error, { campaignId })
     }
-
-    return data as CampaignRow
   }
 
   async findAll(): Promise<CampaignRow[]> {
-    const { data, error } = await supabaseAdmin
-      .from('campaigns')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
+    try {
+      const campaigns = await prisma.campaign.findMany({
+        orderBy: { created_at: 'desc' },
+      })
+      return campaigns as unknown as CampaignRow[]
+    } catch (error) {
       throw AppError.internal('Erro ao buscar campanhas', error)
     }
-
-    return (data ?? []) as CampaignRow[]
   }
 
   async countContactsByStatus(campaignId: string, status: string): Promise<number> {
-    const { count, error } = await supabaseAdmin
-      .from('campaign_contacts')
-      .select('*', { count: 'exact', head: true })
-      .eq('campaign_id', campaignId)
-      .eq('status', status)
-
-    if (error) {
+    try {
+      return await prisma.campaignContact.count({
+        where: { campaign_id: campaignId, status },
+      })
+    } catch (error) {
       throw AppError.internal('Erro ao contar contatos', error, { campaignId, status })
     }
-
-    return count ?? 0
   }
 
   async findEligibleContacts(campaignId: string): Promise<CampaignContactRow[]> {
-    const { data, error } = await supabaseAdmin
-      .from('campaign_contacts')
-      .select(`
-        id,
-        tentativas_realizadas,
-        ultima_tentativa,
-        status,
-        contact_id,
-        contacts (
-          id,
-          nome,
-          cpf,
-          telefone,
-          instituicao
-        )
-      `)
-      .eq('campaign_id', campaignId)
-      .eq('status', 'pendente')
-
-    if (error) {
+    try {
+      const rows = await prisma.campaignContact.findMany({
+        where: { campaign_id: campaignId, status: 'pendente' },
+        select: {
+          id: true,
+          contact_id: true,
+          tentativas_realizadas: true,
+          ultima_tentativa: true,
+          status: true,
+          contact: {
+            select: {
+              id: true,
+              nome: true,
+              cpf: true,
+              telefone: true,
+              instituicao: true,
+            },
+          },
+        },
+      })
+      return rows as unknown as CampaignContactRow[]
+    } catch (error) {
       throw AppError.internal('Erro ao buscar contatos elegíveis', error, { campaignId })
     }
-
-    return (data ?? []) as unknown as CampaignContactRow[]
   }
 
-  async markContactAsInProgress(campaignContactId: string, currentAttempts: number): Promise<void> {
-    const { error } = await supabaseAdmin
-      .from('campaign_contacts')
-      .update({
-        status: 'em_andamento',
-        tentativas_realizadas: currentAttempts + 1,
-        ultima_tentativa: new Date().toISOString(),
+  async markContactAsInProgress(
+    campaignContactId: string,
+    currentAttempts: number,
+  ): Promise<void> {
+    try {
+      await prisma.campaignContact.update({
+        where: { id: campaignContactId },
+        data: {
+          status: 'em_andamento',
+          tentativas_realizadas: currentAttempts + 1,
+          ultima_tentativa: new Date(),
+        },
       })
-      .eq('id', campaignContactId)
-
-    if (error) {
+    } catch (error) {
       throw AppError.internal('Erro ao atualizar status do contato', error, { campaignContactId })
     }
   }
 
   async updateContactStatus(campaignContactId: string, status: string): Promise<void> {
-    const { error } = await supabaseAdmin
-      .from('campaign_contacts')
-      .update({
-        status,
-        ultima_tentativa: new Date().toISOString(),
+    try {
+      await prisma.campaignContact.update({
+        where: { id: campaignContactId },
+        data: { status, ultima_tentativa: new Date() },
       })
-      .eq('id', campaignContactId)
-
-    if (error) {
-      throw AppError.internal('Erro ao atualizar status do contato', error, { campaignContactId, status })
+    } catch (error) {
+      throw AppError.internal('Erro ao atualizar status do contato', error, {
+        campaignContactId,
+        status,
+      })
     }
   }
 
   async toggleActive(campaignId: string, isActive: boolean): Promise<void> {
-    const { error } = await supabaseAdmin
-      .from('campaigns')
-      .update({ ativa: isActive })
-      .eq('id', campaignId)
-
-    if (error) {
+    try {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { ativa: isActive },
+      })
+    } catch (error) {
       throw AppError.internal('Erro ao atualizar status da campanha', error, { campaignId })
     }
   }
