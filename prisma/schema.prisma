@@ -1,0 +1,128 @@
+// prisma/schema.prisma
+// CallCenterIA-DDM — migração Supabase → PostgreSQL Railway
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// CAMPAIGNS
+// ─────────────────────────────────────────────
+model Campaign {
+  id                  String   @id @default(uuid())
+  nome                String
+  instituicao         String
+  tipo_telefonia      String
+  ativa               Boolean  @default(false)
+  assistant_vapi_id   String
+  linha_vapi_id       String
+  max_tentativas      Int      @default(3)
+  intervalo_minutos   Int      @default(60)
+  janela_inicio       String   @default("08:00")
+  janela_fim          String   @default("18:00")
+  ligacoes_simultaneas Int     @default(1)
+  ignore_horario      Boolean  @default(false)
+  created_at          DateTime @default(now())
+
+  campaign_contacts CampaignContact[]
+
+  @@map("campaigns")
+}
+
+// ─────────────────────────────────────────────
+// CONTACTS
+// ─────────────────────────────────────────────
+model Contact {
+  id         String  @id @default(uuid())
+  nome       String?
+  cpf        String
+  telefone   String
+  instituicao String?
+  created_at DateTime @default(now())
+
+  campaign_contacts CampaignContact[]
+
+  @@unique([cpf, telefone])
+  @@index([telefone])
+  @@map("contacts")
+}
+
+// ─────────────────────────────────────────────
+// CAMPAIGN_CONTACTS (tabela pivô)
+// ─────────────────────────────────────────────
+model CampaignContact {
+  id                    String    @id @default(uuid())
+  campaign_id           String
+  contact_id            String
+  status                String    @default("pendente")
+  tentativas_realizadas Int       @default(0)
+  ultima_tentativa      DateTime?
+  created_at            DateTime  @default(now())
+
+  campaign Campaign @relation(fields: [campaign_id], references: [id])
+  contact  Contact  @relation(fields: [contact_id], references: [id])
+  calls    Call[]
+
+  @@unique([campaign_id, contact_id])
+  @@index([campaign_id, status])
+  @@map("campaign_contacts")
+}
+
+// ─────────────────────────────────────────────
+// CALLS
+// ─────────────────────────────────────────────
+model Call {
+  id                     String    @id @default(uuid())
+  vapi_call_id           String?   @unique
+  campaign_contact_id    String?
+  status                 String
+  customer_number        String?
+  started_at             DateTime?
+  ended_at               DateTime?
+  ended_reason           String?
+  duration_seconds       Int?
+  custo_total            Float?
+  custo_stt              Float?
+  custo_tts              Float?
+  custo_vapi             Float?
+  success_evaluation     String?
+  transcript             String?
+  recording_url          String?
+  stereo_recording_url   String?
+  summary                String?
+  assistant_id           String?
+  phone_number_id        String?
+  structured_name        String?
+  structured_rating_label String?
+  structured_rating_text  String?
+  structured_purpose     String?
+  structured_main_points String?
+  metadata_raw           Json?
+  created_at             DateTime  @default(now())
+
+  campaign_contact CampaignContact? @relation(fields: [campaign_contact_id], references: [id])
+
+  @@index([started_at(sort: Desc)])
+  @@index([campaign_contact_id])
+  @@map("calls")
+}
+
+// ─────────────────────────────────────────────
+// SYSTEM_LOGS
+// ─────────────────────────────────────────────
+model SystemLog {
+  id         String   @id @default(uuid())
+  level      String   // info | warn | error | success
+  category   String
+  message    String
+  details    Json?
+  created_at DateTime @default(now())
+
+  @@index([created_at(sort: Desc)])
+  @@map("system_logs")
+}
