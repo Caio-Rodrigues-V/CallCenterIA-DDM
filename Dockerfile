@@ -1,4 +1,3 @@
-@'
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
 COPY frontend/package*.json ./
@@ -30,4 +29,3 @@ COPY --from=frontend-build /app/dist ./public
 COPY prisma ./prisma
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
-'@ | Set-Content Dockerfile
