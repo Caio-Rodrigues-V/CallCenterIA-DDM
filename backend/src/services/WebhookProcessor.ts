@@ -1,3 +1,4 @@
+// backend/src/services/WebhookProcessor.ts
 import { CallRepository } from '../repositories/CallRepository.js'
 import { CampaignRepository } from '../repositories/CampaignRepository.js'
 import { AppError } from '../errors/AppError.js'
@@ -8,6 +9,7 @@ import {
   LIMITS,
 } from '../constants/index.js'
 import { Logger } from './Logger.js'
+
 interface VapiCallbackPayload {
   type: string
   call?: Record<string, unknown>
@@ -17,7 +19,7 @@ interface VapiCallbackPayload {
 export class WebhookProcessor {
   constructor(
     private readonly callRepository: CallRepository,
-    private readonly campaignRepository: CampaignRepository
+    private readonly campaignRepository: CampaignRepository,
   ) {}
 
   async processVapiCallback(rawPayload: VapiCallbackPayload): Promise<{ callId: string }> {
@@ -32,7 +34,8 @@ export class WebhookProcessor {
     const vapiCallId = call.id as string
 
     const existingCall = await this.findOrCreateCallRecord(vapiCallId, metadata)
-    const callData = this.extractCallData(call, metadata, payload as unknown as Record<string, unknown>)    
+    const callData = this.extractCallData(call, metadata, payload as unknown as Record<string, unknown>)
+
     await this.callRepository.update(existingCall.id, callData)
     await Logger.success('Webhook', 'Callback VAPI processado', { callId: existingCall.id })
     await this.updateCampaignContactStatus(existingCall, call, callData)
@@ -46,18 +49,18 @@ export class WebhookProcessor {
 
   private extractMetadata(
     call: Record<string, unknown>,
-    payloadMetadata?: Record<string, unknown>
+    payloadMetadata?: Record<string, unknown>,
   ): Record<string, unknown> {
-    const callMetadata = typeof call.metadata === 'object' && call.metadata !== null
-      ? call.metadata as Record<string, unknown>
-      : {}
-
+    const callMetadata =
+      typeof call.metadata === 'object' && call.metadata !== null
+        ? (call.metadata as Record<string, unknown>)
+        : {}
     return { ...payloadMetadata, ...callMetadata }
   }
 
   private async findOrCreateCallRecord(
     vapiCallId: string,
-    metadata: Record<string, unknown>
+    metadata: Record<string, unknown>,
   ): Promise<{ id: string; campaign_contact_id: string | null }> {
     const existingByVapiId = await this.callRepository.findByVapiCallId(vapiCallId)
     if (existingByVapiId) return existingByVapiId
@@ -82,7 +85,7 @@ export class WebhookProcessor {
   private extractCallData(
     call: Record<string, unknown>,
     metadata: Record<string, unknown>,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
   ) {
     const startedAt = new Date(call.startedAt as string)
     const endedAt = new Date(call.endedAt as string)
@@ -141,28 +144,24 @@ export class WebhookProcessor {
   private async updateCampaignContactStatus(
     existingCall: { id: string; campaign_contact_id: string | null },
     call: Record<string, unknown>,
-    callData: ReturnType<typeof this.extractCallData>
+    callData: ReturnType<typeof this.extractCallData>,
   ): Promise<void> {
     const campaignContactId = existingCall.campaign_contact_id ?? callData.campaignContactId
     if (!campaignContactId) return
 
-    const { data: campaignContact, error } = await (await import('../lib/supabase.js')).supabaseAdmin
-      .from('campaign_contacts')
-      .select('tentativas_realizadas, campaign_id(max_tentativas)')
-      .eq('id', campaignContactId)
-      .single()
+    // Busca via CampaignRepository — sem Supabase
+    const campaign = await this.campaignRepository.findByCampaignContactId(campaignContactId)
+    if (!campaign) return
 
-    if (error || !campaignContact) return
-
-    const maxAttempts = (campaignContact.campaign_id as any)?.max_tentativas ?? 3
-    const currentAttempts = campaignContact.tentativas_realizadas ?? 0
+    const { tentativas_realizadas, max_tentativas } = campaign
+    const maxAttempts = max_tentativas ?? 3
+    const currentAttempts = tentativas_realizadas ?? 0
     const endedReason = call.endedReason as string
-    const durationSeconds = callData.durationSeconds ?? 0
 
     const newStatus = this.determineNewContactStatus({
       successEvaluation: callData.successEvaluation,
       endedReason,
-      durationSeconds,
+      durationSeconds: callData.durationSeconds ?? 0,
       currentAttempts,
       maxAttempts,
     })

@@ -1,3 +1,4 @@
+// backend/src/routes/campaigns.ts
 import { Router } from 'express'
 import { CampaignRepository } from '../repositories/CampaignRepository.js'
 import { callQueue } from '../queues/callQueue.js'
@@ -43,11 +44,12 @@ router.post('/start', async (req, res, next) => {
 
     const vapiLines = campaign.linha_vapi_id
       .split(',')
-      .map(line => line.trim())
+      .map((line: string) => line.trim())
       .filter(Boolean)
 
     const jobs = eligibleContacts.map((cc, index) => {
-      const contact = Array.isArray(cc.contacts) ? cc.contacts[0] : cc.contacts
+      // "contact" singular — alinhado com o schema Prisma e CampaignRepository
+      const contact = cc.contact
       const phoneNumberId = vapiLines[index % vapiLines.length]
 
       return {

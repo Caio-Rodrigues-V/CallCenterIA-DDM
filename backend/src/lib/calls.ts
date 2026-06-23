@@ -1,126 +1,100 @@
-import { env } from '../config/env.js';
-import { supabaseAdmin } from './supabase.js';
+// backend/src/lib/calls.ts
+import { env } from '../config/env.js'
+import { prisma } from './prisma.js'
 
-const BACKEND_PUBLIC_URL_SETTING_KEYS = [
-  'backend_public_url',
-  'backend_url',
-  'public_base_url',
-  'public_url'
-] as const;
-const QUEUED_REUSE_WINDOW_MS = 30 * 60 * 1000;
+const QUEUED_REUSE_WINDOW_MS = 30 * 60 * 1000
 
 interface QueuedCallInput {
-  campaignContactId?: string | null;
-  contactPhoneId?: string | null;
-  customerNumber?: string | null;
-  campaignName?: string | null;
-  customerCpf?: string | null;
-  customerName?: string | null;
-  assistantId?: string | null;
-  phoneNumberId?: string | null;
+  campaignContactId?: string | null
+  contactPhoneId?: string | null
+  customerNumber?: string | null
+  campaignName?: string | null
+  customerCpf?: string | null
+  customerName?: string | null
+  assistantId?: string | null
+  phoneNumberId?: string | null
 }
 
 function normalizeBaseUrl(value: string | null | undefined): string | null {
-  if (!value) return null;
-
-  const trimmed = value.trim().replace(/\/+$/, '');
-  if (!trimmed) return null;
-
+  if (!value) return null
+  const trimmed = value.trim().replace(/\/+$/, '')
+  if (!trimmed) return null
   try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return null;
-    }
-    return parsed.toString().replace(/\/+$/, '');
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    return parsed.toString().replace(/\/+$/, '')
   } catch {
-    return null;
+    return null
   }
 }
 
 function isLoopbackUrl(value: string): boolean {
   try {
-    const hostname = new URL(value).hostname.toLowerCase();
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1';
+    const hostname = new URL(value).hostname.toLowerCase()
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
   } catch {
-    return false;
+    return false
   }
 }
 
 export async function getBackendPublicUrl(): Promise<string> {
-  const { data, error } = await supabaseAdmin
-    .from('app_settings')
-    .select('setting_key, setting_value')
-    .in('setting_key', [...BACKEND_PUBLIC_URL_SETTING_KEYS]);
-
-  if (!error && data) {
-    for (const key of BACKEND_PUBLIC_URL_SETTING_KEYS) {
-      const configuredUrl = normalizeBaseUrl(data.find((item) => item.setting_key === key)?.setting_value);
-      if (configuredUrl) {
-        return configuredUrl;
-      }
-    }
-  }
-
-  const fallbackUrl = normalizeBaseUrl(env.backendPublicUrl) || `http://localhost:${env.port}`;
+  // Sem app_settings no novo schema — usa direto a env
+  const fallbackUrl = normalizeBaseUrl(env.backendPublicUrl) || `http://localhost:${env.port}`
   if (isLoopbackUrl(fallbackUrl)) {
     console.warn(
       `[calls] BACKEND_PUBLIC_URL em modo loopback (${fallbackUrl}). ` +
         'Callbacks externos da VAPI/n8n nao vao conseguir atingir esse endereco. ' +
-        'Configure app_settings.backend_public_url ou a env BACKEND_PUBLIC_URL com uma URL publica.'
-    );
+        'Configure a env BACKEND_PUBLIC_URL com uma URL publica.',
+    )
   }
-
-  return fallbackUrl;
+  return fallbackUrl
 }
 
 export async function createQueuedCallRecord(input: QueuedCallInput): Promise<string | null> {
-  const payload = {
-    campaign_contact_id: input.campaignContactId ?? null,
-    contact_phone_id: input.contactPhoneId ?? null,
-    customer_number: input.customerNumber ?? null,
-    campanha: input.campaignName ?? null,
-    cpf: input.customerCpf ?? null,
-    cliente: input.customerName ?? null,
-    assistant_id: input.assistantId ?? null,
-    phone_number_id: input.phoneNumberId ?? null,
-    status: 'queued'
-  };
+  try {
+    if (input.campaignContactId) {
+      const reuseWindowStart = new Date(Date.now() - QUEUED_REUSE_WINDOW_MS)
 
-  if (input.campaignContactId) {
-    const reuseWindowStart = new Date(Date.now() - QUEUED_REUSE_WINDOW_MS).toISOString();
-    const { data: existingQueued, error: findError } = await supabaseAdmin
-      .from('calls')
-      .select('id')
-      .eq('campaign_contact_id', input.campaignContactId)
-      .is('vapi_call_id', null)
-      .is('started_at', null)
-      .is('metadata_raw', null)
-      .gte('created_at', reuseWindowStart)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      const existingQueued = await prisma.call.findFirst({
+        where: {
+          campaign_contact_id: input.campaignContactId,
+          vapi_call_id: null,
+          started_at: null,
+          metadata_raw: null,
+          created_at: { gte: reuseWindowStart },
+        },
+        orderBy: { created_at: 'desc' },
+        select: { id: true },
+      })
 
-    if (findError) {
-      console.warn('[calls] nao foi possivel buscar registro queued existente:', findError.message);
-    } else if (existingQueued?.id) {
-      const { error: updateError } = await supabaseAdmin
-        .from('calls')
-        .update(payload)
-        .eq('id', existingQueued.id);
-
-      if (updateError) {
-        console.warn('[calls] nao foi possivel reutilizar registro queued existente:', updateError.message);
-      } else {
-        return existingQueued.id;
+      if (existingQueued?.id) {
+        await prisma.call.update({
+          where: { id: existingQueued.id },
+          data: {
+            customer_number: input.customerNumber ?? null,
+            assistant_id: input.assistantId ?? null,
+            phone_number_id: input.phoneNumberId ?? null,
+            status: 'queued',
+          },
+        })
+        return existingQueued.id
       }
     }
-  }
 
-  const { data, error } = await supabaseAdmin.from('calls').insert(payload).select('id').maybeSingle();
-  if (error) {
-    console.warn('[calls] nao foi possivel criar registro queued em calls:', error.message);
-    return null;
-  }
+    const created = await prisma.call.create({
+      data: {
+        campaign_contact_id: input.campaignContactId ?? null,
+        customer_number: input.customerNumber ?? null,
+        assistant_id: input.assistantId ?? null,
+        phone_number_id: input.phoneNumberId ?? null,
+        status: 'queued',
+      },
+      select: { id: true },
+    })
 
-  return data?.id ?? null;
+    return created.id
+  } catch (error) {
+    console.warn('[calls] nao foi possivel criar registro queued em calls:', error)
+    return null
+  }
 }
