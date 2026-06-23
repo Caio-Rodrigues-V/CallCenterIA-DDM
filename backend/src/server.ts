@@ -25,6 +25,7 @@ app.use('/api/campaigns', campaignsRouter)
 app.use('/api/calls', callsRouter)
 app.use('/api/contacts', contactsRouter)
 app.use('/api/webhooks', webhooksRouter)
+app.use('/api/logs', logsRouter)
 
 const staticDir = path.resolve(__dirname, '../public')
 if (fs.existsSync(staticDir)) {
