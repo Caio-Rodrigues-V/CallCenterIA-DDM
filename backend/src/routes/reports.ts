@@ -4,6 +4,11 @@ import { prisma } from '../lib/prisma.js'
 
 const router = Router()
 
+const serializeBigInt = (data: any): any =>
+  JSON.parse(JSON.stringify(data, (_key, value) =>
+    typeof value === 'bigint' ? Number(value) : value
+  ))
+
 router.get('/kpis', async (_req, res, next) => {
   try {
     const result = await prisma.$queryRawUnsafe(`SELECT * FROM vw_report_kpis LIMIT 1`)
