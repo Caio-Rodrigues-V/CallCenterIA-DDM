@@ -13,7 +13,6 @@ RUN apk add --no-cache openssl
 COPY backend/package*.json ./
 RUN npm ci
 COPY backend/ .
-COPY prisma ./prisma
 RUN npm run build
 RUN npx prisma generate --schema ./prisma/schema.prisma
 
@@ -28,6 +27,6 @@ COPY --from=backend-build /app/dist ./dist
 COPY --from=backend-build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=backend-build /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=frontend-build /app/dist ./public
-COPY prisma ./prisma
+COPY backend/prisma ./prisma
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
