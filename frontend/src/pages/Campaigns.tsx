@@ -1,13 +1,33 @@
+// frontend/src/pages/Campaigns.tsx
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Badge, Modal, Input } from '../components/ui'
-import { Play, Edit, Plus, Phone, Users, Clock, RefreshCw, Loader2, TrendingUp } from 'lucide-react'
+import { Play, Plus, Phone, Users, Clock, RefreshCw, Loader2, TrendingUp } from 'lucide-react'
 import { campaignApi } from '../services/api'
 import { logService } from '../services/logService'
+
+const API = import.meta.env.VITE_API_BASE_URL ?? ''
+
+const defaultForm = {
+  nome: '',
+  instituicao: '',
+  tipo_telefonia: 'vapi',
+  assistant_vapi_id: '',
+  linha_vapi_id: '',
+  max_tentativas: '3',
+  intervalo_minutos: '60',
+  janela_inicio: '08:00',
+  janela_fim: '18:00',
+  ligacoes_simultaneas: '1',
+  ignore_horario: false,
+}
 
 export const Campaigns: React.FC = () => {
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [executingId, setExecutingId] = useState<string | null>(null)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [form, setForm] = useState(defaultForm)
+  const [creating, setCreating] = useState(false)
 
   const fetchCampaigns = async () => {
     setLoading(true)
@@ -21,14 +41,11 @@ export const Campaigns: React.FC = () => {
     }
   }
 
-  useEffect(() => {
-    fetchCampaigns()
-  }, [])
+  useEffect(() => { fetchCampaigns() }, [])
 
   const handleExecuteCampaign = async (campaign: any) => {
     if (executingId) return
     if (!confirm(`Deseja executar a campanha "${campaign.nome}" agora?`)) return
-
     setExecutingId(campaign.id)
     try {
       const result = await campaignApi.start(campaign.id)
@@ -44,8 +61,37 @@ export const Campaigns: React.FC = () => {
     try {
       await campaignApi.toggle(campaign.id, !campaign.ativa)
       fetchCampaigns()
-    } catch (error) {
+    } catch {
       alert('Erro ao atualizar status.')
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!form.nome) return alert('Nome é obrigatório.')
+    if (!form.assistant_vapi_id) return alert('Assistant Vapi ID é obrigatório.')
+    if (!form.linha_vapi_id) return alert('Linha Vapi ID é obrigatório.')
+
+    setCreating(true)
+    try {
+      const res = await fetch(`${API}/api/campaigns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          max_tentativas: Number(form.max_tentativas),
+          intervalo_minutos: Number(form.intervalo_minutos),
+          ligacoes_simultaneas: Number(form.ligacoes_simultaneas),
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      alert('Campanha criada com sucesso!')
+      setIsCreateOpen(false)
+      setForm(defaultForm)
+      fetchCampaigns()
+    } catch (e: any) {
+      alert(`Erro ao criar campanha: ${e.message}`)
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -54,6 +100,9 @@ export const Campaigns: React.FC = () => {
   const pendingContacts = campaigns.reduce((acc, c) => acc + (c.pendingContacts ?? 0), 0)
   const completedContacts = campaigns.reduce((acc, c) => acc + (c.completedContacts ?? 0), 0)
   const globalEfficiency = totalContacts > 0 ? Math.round((completedContacts / totalContacts) * 100) : 0
+
+  const f = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(prev => ({ ...prev, [field]: e.target.value }))
 
   return (
     <div className="space-y-6">
@@ -69,7 +118,6 @@ export const Campaigns: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -81,7 +129,6 @@ export const Campaigns: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -93,7 +140,6 @@ export const Campaigns: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -115,6 +161,9 @@ export const Campaigns: React.FC = () => {
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
+          <Button variant="primary" icon={Plus} onClick={() => setIsCreateOpen(true)}>
+            Nova Campanha
+          </Button>
         </div>
 
         {loading ? (
@@ -180,6 +229,53 @@ export const Campaigns: React.FC = () => {
           </div>
         )}
       </div>
+
+      {isCreateOpen && (
+        <Modal title="Nova Campanha" isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); setForm(defaultForm) }}>
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <Input label="Nome da Campanha *" value={form.nome} onChange={f('nome')} placeholder="Ex: Cobrança Maio 2026" />
+              </div>
+              <Input label="Instituição" value={form.instituicao} onChange={f('instituicao')} placeholder="Ex: Faculdade XYZ" />
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tipo de Telefonia</label>
+                <select className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                  value={form.tipo_telefonia} onChange={f('tipo_telefonia')}>
+                  <option value="vapi">VAPI</option>
+                  <option value="sip">SIP</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <Input label="Assistant Vapi ID *" value={form.assistant_vapi_id} onChange={f('assistant_vapi_id')} placeholder="Ex: d0e0eea1-2e61-4ae5-91b8-..." />
+              </div>
+              <div className="md:col-span-2">
+                <Input label="Linha Vapi ID *" value={form.linha_vapi_id} onChange={f('linha_vapi_id')} placeholder="Ex: phone-number-id (separe por vírgula para múltiplas)" />
+              </div>
+              <Input label="Janela Início" type="time" value={form.janela_inicio} onChange={f('janela_inicio')} />
+              <Input label="Janela Fim" type="time" value={form.janela_fim} onChange={f('janela_fim')} />
+              <Input label="Máx. Tentativas" type="number" value={form.max_tentativas} onChange={f('max_tentativas')} />
+              <Input label="Intervalo (min)" type="number" value={form.intervalo_minutos} onChange={f('intervalo_minutos')} />
+              <Input label="Ligações Simultâneas" type="number" value={form.ligacoes_simultaneas} onChange={f('ligacoes_simultaneas')} />
+              <div className="flex items-center gap-3 pt-6">
+                <div
+                  onClick={() => setForm(prev => ({ ...prev, ignore_horario: !prev.ignore_horario }))}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full cursor-pointer transition-colors ${form.ignore_horario ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'}`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${form.ignore_horario ? 'translate-x-4' : 'translate-x-1'}`} />
+                </div>
+                <span className="text-sm text-slate-600 dark:text-slate-300">Ignorar janela de horário</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setIsCreateOpen(false); setForm(defaultForm) }}>Cancelar</Button>
+              <Button variant="primary" onClick={handleCreate} disabled={creating}>
+                {creating ? 'Criando...' : 'Criar Campanha'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
