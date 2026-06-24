@@ -29,4 +29,4 @@ COPY --from=backend-build /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=frontend-build /app/dist ./public
 COPY backend/prisma ./prisma
 EXPOSE 4000
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && echo 'Migration done' && node dist/server.js"]
+CMD ["node", "dist/server.js"]
