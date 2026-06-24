@@ -1,16 +1,11 @@
+// frontend/src/pages/Reports.tsx
 import React, { useEffect, useState } from 'react'
 import { Phone, Target, Clock, DollarSign } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts'
-import { supabase } from '../lib/supabaseClient'
 
-const chartTooltipStyle = {
-  backgroundColor: '#0F172A',
-  borderColor: '#334155',
-  color: '#F8FAFC',
-  borderRadius: '4px',
-  fontSize: '12px',
-}
+const API = import.meta.env.VITE_API_BASE_URL ?? ''
 
+const chartTooltipStyle = { backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC', borderRadius: '4px', fontSize: '12px' }
 const chartTooltipTextStyle = { color: '#F8FAFC' }
 
 const formatDuration = (seconds: number): string => {
@@ -18,20 +13,11 @@ const formatDuration = (seconds: number): string => {
   const secs = seconds % 60
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
-
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
 export const Reports: React.FC = () => {
-  const [kpis, setKpis] = useState<any>({
-    total_calls: 0,
-    contacted_calls: 0,
-    contact_rate_percent: 0,
-    successful_calls: 0,
-    success_rate_percent: 0,
-    avg_duration_seconds: 0,
-    total_cost: 0,
-  })
+  const [kpis, setKpis] = useState<any>({ total_calls: 0, contacted_calls: 0, contact_rate_percent: 0, successful_calls: 0, success_rate_percent: 0, avg_duration_seconds: 0, total_cost: 0 })
   const [funnelData, setFunnelData] = useState<any[]>([])
   const [terminationData, setTerminationData] = useState<any[]>([])
   const [activityData, setActivityData] = useState<any[]>([])
@@ -39,31 +25,28 @@ export const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchReportData = async () => {
+    const fetchAll = async () => {
       try {
         setLoading(true)
-
-        const [kpisRes, funnelRes, terminationRes, activityRes, costsRes] = await Promise.all([
-          supabase.from('vw_report_kpis').select('*').single(),
-          supabase.from('vw_report_funnel').select('*'),
-          supabase.from('vw_report_termination_reasons').select('*'),
-          supabase.from('vw_report_daily_activity').select('*'),
-          supabase.from('vw_report_daily_costs').select('*'),
+        const [k, f, t, a, c] = await Promise.all([
+          fetch(`${API}/api/reports/kpis`).then(r => r.json()),
+          fetch(`${API}/api/reports/funnel`).then(r => r.json()),
+          fetch(`${API}/api/reports/termination-reasons`).then(r => r.json()),
+          fetch(`${API}/api/reports/daily-activity`).then(r => r.json()),
+          fetch(`${API}/api/reports/daily-costs`).then(r => r.json()),
         ])
-
-        if (kpisRes.data) setKpis(kpisRes.data)
-        if (funnelRes.data) setFunnelData(funnelRes.data)
-        if (terminationRes.data) setTerminationData(terminationRes.data)
-        if (activityRes.data) setActivityData(activityRes.data)
-        if (costsRes.data) setCostData(costsRes.data)
+        if (k) setKpis(k)
+        if (f) setFunnelData(f)
+        if (t) setTerminationData(t)
+        if (a) setActivityData(a)
+        if (c) setCostData(c)
       } catch (error) {
         console.error('[Reports] erro ao buscar dados:', error)
       } finally {
         setLoading(false)
       }
     }
-
-    fetchReportData()
+    fetchAll()
   }, [])
 
   if (loading) {
@@ -88,7 +71,6 @@ export const Reports: React.FC = () => {
             <Phone className="w-5 h-5" />
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Taxa de Sucesso</p>
@@ -100,7 +82,6 @@ export const Reports: React.FC = () => {
             <Target className="w-5 h-5" />
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Duração Média</p>
@@ -112,7 +93,6 @@ export const Reports: React.FC = () => {
             <Clock className="w-5 h-5" />
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Custo Total</p>
@@ -139,7 +119,6 @@ export const Reports: React.FC = () => {
             </BarChart>
           </ResponsiveContainer>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm h-96">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-6 uppercase tracking-wider">Motivos de Término</h3>
           <ResponsiveContainer width="100%" height="80%">
@@ -152,7 +131,6 @@ export const Reports: React.FC = () => {
             </PieChart>
           </ResponsiveContainer>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm h-80">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-6 uppercase tracking-wider">Atividade Diária</h3>
           <ResponsiveContainer width="100%" height="80%">
@@ -165,7 +143,6 @@ export const Reports: React.FC = () => {
             </LineChart>
           </ResponsiveContainer>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm h-80">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-6 uppercase tracking-wider">Evolução de Custos</h3>
           <ResponsiveContainer width="100%" height="80%">

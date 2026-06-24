@@ -1,3 +1,4 @@
+// backend/src/server.ts
 import express from 'express'
 import cors from 'cors'
 import path from 'node:path'
@@ -8,8 +9,10 @@ import { campaignsRouter } from './routes/campaigns.js'
 import { callsRouter } from './routes/calls.js'
 import { contactsRouter } from './routes/contacts.js'
 import { webhooksRouter } from './routes/webhooks.js'
-import { AppError } from './errors/AppError.js'
 import { logsRouter } from './routes/logs.js'
+import { reportsRouter } from './routes/reports.js'
+import { qualityRouter } from './routes/quality.js'
+import { AppError } from './errors/AppError.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -26,6 +29,8 @@ app.use('/api/calls', callsRouter)
 app.use('/api/contacts', contactsRouter)
 app.use('/api/webhooks', webhooksRouter)
 app.use('/api/logs', logsRouter)
+app.use('/api/reports', reportsRouter)
+app.use('/api/quality', qualityRouter)
 
 const staticDir = path.resolve(__dirname, '../public')
 if (fs.existsSync(staticDir)) {
@@ -44,7 +49,6 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
       context: error.context,
     })
   }
-
   console.error('[server] erro não tratado:', error)
   res.status(500).json({ success: false, error: 'Erro interno do servidor' })
 })

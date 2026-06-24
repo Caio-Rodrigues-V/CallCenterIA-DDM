@@ -1,57 +1,43 @@
+// frontend/src/pages/Quality.tsx
 import React, { useEffect, useState } from 'react'
 import { Award, Star, ThumbsUp, AlertCircle, BrainCircuit, Target } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { supabase } from '../lib/supabaseClient'
+
+const API = import.meta.env.VITE_API_BASE_URL ?? ''
 
 const chartTooltipStyle = {
-  backgroundColor: '#0F172A',
-  borderColor: '#334155',
-  color: '#F8FAFC',
-  borderRadius: '4px',
-  fontSize: '12px',
+  backgroundColor: '#0F172A', borderColor: '#334155', color: '#F8FAFC', borderRadius: '4px', fontSize: '12px',
 }
-
 const chartTooltipTextStyle = { color: '#F8FAFC' }
 
 export const Quality: React.FC = () => {
-  const [metrics, setMetrics] = useState<any>({
-    nps_score: 0,
-    avg_rating: 0,
-    promoters: 0,
-    detractors: 0,
-    total_rated: 0,
-    promoters_percent: 0,
-    detractors_percent: 0,
-  })
+  const [metrics, setMetrics] = useState<any>({ nps_score: 0, avg_rating: 0, promoters: 0, detractors: 0, total_rated: 0, promoters_percent: 0, detractors_percent: 0 })
   const [ratingDistribution, setRatingDistribution] = useState<any[]>([])
   const [campaignQuality, setCampaignQuality] = useState<any[]>([])
   const [topObjections, setTopObjections] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchQualityData = async () => {
+    const fetch4 = async () => {
       try {
         setLoading(true)
-
-        const [metricsRes, distributionRes, campaignsRes, objectionsRes] = await Promise.all([
-          supabase.from('vw_quality_metrics').select('*').single(),
-          supabase.from('vw_quality_rating_distribution').select('*'),
-          supabase.from('vw_quality_by_campaign').select('*'),
-          supabase.from('vw_quality_top_objections').select('*'),
+        const [m, d, c, o] = await Promise.all([
+          fetch(`${API}/api/quality/metrics`).then(r => r.json()),
+          fetch(`${API}/api/quality/rating-distribution`).then(r => r.json()),
+          fetch(`${API}/api/quality/by-campaign`).then(r => r.json()),
+          fetch(`${API}/api/quality/top-objections`).then(r => r.json()),
         ])
-
-        if (metricsRes.data) setMetrics(metricsRes.data)
-        if (distributionRes.data) setRatingDistribution(distributionRes.data)
-        if (campaignsRes.data) setCampaignQuality(campaignsRes.data)
-        if (objectionsRes.data) setTopObjections(objectionsRes.data)
+        if (m) setMetrics(m)
+        if (d) setRatingDistribution(d)
+        if (c) setCampaignQuality(c)
+        if (o) setTopObjections(o)
       } catch (error) {
         console.error('[Quality] erro ao buscar dados:', error)
       } finally {
         setLoading(false)
       }
     }
-
-    fetchQualityData()
+    fetch4()
   }, [])
 
   if (loading) {
@@ -68,9 +54,7 @@ export const Quality: React.FC = () => {
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Net Promoter Score</p>
-            <h3 className={`text-4xl font-bold mt-1 font-mono ${metrics.nps_score >= 50 ? 'text-green-500' : metrics.nps_score >= 0 ? 'text-yellow-500' : 'text-red-500'}`}>
-              {metrics.nps_score}
-            </h3>
+            <h3 className={`text-4xl font-bold mt-1 font-mono ${metrics.nps_score >= 50 ? 'text-green-500' : metrics.nps_score >= 0 ? 'text-yellow-500' : 'text-red-500'}`}>{metrics.nps_score}</h3>
             <p className="text-xs text-slate-500 mt-1">{metrics.total_rated} avaliações</p>
           </div>
           <div className={`absolute right-0 top-0 h-full w-1 ${metrics.nps_score >= 50 ? 'bg-green-500' : metrics.nps_score >= 0 ? 'bg-yellow-500' : 'bg-red-500'}`} />
@@ -78,7 +62,6 @@ export const Quality: React.FC = () => {
             <Award className="w-5 h-5" />
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rating Médio</p>
@@ -90,7 +73,6 @@ export const Quality: React.FC = () => {
             <Star className="w-5 h-5" />
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Promotores</p>
@@ -102,7 +84,6 @@ export const Quality: React.FC = () => {
             <ThumbsUp className="w-5 h-5" />
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10">
             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detratores</p>
@@ -133,15 +114,12 @@ export const Quality: React.FC = () => {
               {ratingDistribution.map((item, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: item.color }} />
-                  <span className="text-xs text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
-                    {item.name}: {item.value}%
-                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">{item.name}: {item.value}%</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm h-96">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wider">Score por Campanha</h3>
           <p className="text-xs text-slate-500 mb-6 font-mono">MÉDIA DE AVALIAÇÕES (0-100)</p>
@@ -162,8 +140,7 @@ export const Quality: React.FC = () => {
           <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 blur-[80px] rounded-full pointer-events-none" />
           <div className="mb-6">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 text-orange-600 text-[10px] font-bold uppercase tracking-wider mb-2">
-              <BrainCircuit className="w-3.5 h-3.5" />
-              IA Analysis
+              <BrainCircuit className="w-3.5 h-3.5" /> IA Analysis
             </div>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Inteligência Qualitativa</h2>
             <p className="text-slate-500 text-sm mt-2">Decodificação automática de comportamento e categorização semântica.</p>
@@ -185,28 +162,20 @@ export const Quality: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="bg-surface dark:bg-dark-surface border border-slate-200 dark:border-slate-800 rounded-lg p-8 flex flex-col gap-6 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider border-l-2 border-orange-500 pl-3">
-            Objection Ranking
-          </h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider border-l-2 border-orange-500 pl-3">Objection Ranking</h3>
           <div className="space-y-5 flex-1 overflow-y-auto max-h-[250px]">
-            {topObjections.length > 0 ? (
-              topObjections.map((objection, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex justify-between items-end text-xs">
-                    <span className="font-medium text-slate-700 dark:text-slate-300">"{objection.objection}"</span>
-                    <span className="font-mono font-bold text-orange-600">{objection.occurrences} oc.</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-orange-500 to-red-600 rounded-full"
-                      style={{ width: `${(objection.occurrences / topObjections[0].occurrences) * 100}%` }}
-                    />
-                  </div>
+            {topObjections.length > 0 ? topObjections.map((objection, index) => (
+              <div key={index} className="space-y-2">
+                <div className="flex justify-between items-end text-xs">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">"{objection.objection}"</span>
+                  <span className="font-mono font-bold text-orange-600">{objection.occurrences} oc.</span>
                 </div>
-              ))
-            ) : (
+                <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-orange-500 to-red-600 rounded-full" style={{ width: `${(objection.occurrences / topObjections[0].occurrences) * 100}%` }} />
+                </div>
+              </div>
+            )) : (
               <div className="flex items-center justify-center h-32 text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
                 <p className="text-sm">Nenhuma objeção encontrada.</p>
               </div>
