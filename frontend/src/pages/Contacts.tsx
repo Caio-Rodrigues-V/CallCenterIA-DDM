@@ -218,7 +218,7 @@ export const Contacts: React.FC = () => {
     const matchesSearch =
       contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contact.phone.includes(searchTerm) ||
-      contact.cpf.includes(searchTerm)
+      (contact.cpf ?? '').includes(searchTerm)
     const matchesCampaign = selectedCampaignFilter === 'all' || contact.campaignId === selectedCampaignFilter
     return matchesSearch && matchesCampaign
   })
@@ -342,7 +342,7 @@ export const Contacts: React.FC = () => {
       </Card>
 
       {isCreateOpen && (
-        <Modal title="Novo Contato" onClose={() => setIsCreateOpen(false)}>
+        <Modal title="Novo Contato" isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}>
           <div className="space-y-4">
             <Input label="Nome" value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} />
             <Input label="CPF (só números)" value={createForm.cpf} onChange={e => setCreateForm(f => ({ ...f, cpf: e.target.value }))} />
@@ -364,7 +364,7 @@ export const Contacts: React.FC = () => {
       )}
 
       {isEditOpen && editingContact && (
-        <Modal title="Editar Contato" onClose={() => setIsEditOpen(false)}>
+        <Modal title="Editar Contato" isOpen={isEditOpen} onClose={() => setIsEditOpen(false)}>
           <div className="space-y-4">
             <Input label="Nome" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
             <Input label="CPF (só números)" value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value }))} />
@@ -378,7 +378,7 @@ export const Contacts: React.FC = () => {
       )}
 
       {isImportOpen && (
-        <Modal title="Importar Contatos" onClose={() => setIsImportOpen(false)}>
+        <Modal title="Importar Contatos" isOpen={isImportOpen} onClose={() => setIsImportOpen(false)}>
           <div className="space-y-4">
             <select className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
               value={importCampaignId} onChange={e => setImportCampaignId(e.target.value)}>
