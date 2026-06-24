@@ -1,19 +1,19 @@
+// frontend/src/pages/Contacts.tsx
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Badge, Input, Modal } from '../components/ui'
-import { Search, Upload, Plus, Trash2, Phone, RotateCw, FileSpreadsheet, RefreshCw, Edit, Loader2, Save } from 'lucide-react'
+import { Search, Upload, Plus, Trash2, RotateCw, RefreshCw, Edit, Loader2 } from 'lucide-react'
 import { Contact, Campaign } from '../types'
-import { contactApi, campaignApi } from '../services/api'
-import { supabase } from '../lib/supabaseClient'
+import { campaignApi } from '../services/api'
 import { logService } from '../services/logService'
 import * as XLSX from 'xlsx'
 
+const API = import.meta.env.VITE_API_BASE_URL ?? ''
 const CPF_DIGIT_COUNT = 11
 
 export const Contacts: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [campaignsList, setCampaignsList] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
-  const [callingContactId, setCallingContactId] = useState<string | null>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', cpf: '', phone: '', institution: '', campaignId: '' })
   const [creating, setCreating] = useState(false)
@@ -35,33 +35,25 @@ export const Contacts: React.FC = () => {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [{ data: contactsData }, campaignsData] = await Promise.all([
-        supabase
-          .from('campaign_contacts')
-          .select(`
-            id, status, tentativas, ultima_tentativa, contact_id,
-            contacts ( nome, cpf, instituicao, telefone ),
-            campaigns ( id, nome )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(100),
-        campaignApi.getAll()
+      const [rows, campaignsData] = await Promise.all([
+        fetch(`${API}/api/contacts`).then(r => r.json()),
+        campaignApi.getAll(),
       ])
 
-      const mappedContacts: Contact[] = (contactsData ?? []).map((row: any) => ({
+      const mappedContacts: Contact[] = (rows ?? []).map((row: any) => ({
         id: row.id,
         contactId: row.contact_id,
-        name: row.contacts?.nome ?? 'Sem Nome',
-        cpf: row.contacts?.cpf ?? '',
-        institution: row.contacts?.instituicao ?? '',
-        campaignId: row.campaigns?.id,
-        campaignName: row.campaigns?.nome ?? 'Campanha Removida',
+        name: row.contact?.nome ?? 'Sem Nome',
+        cpf: row.contact?.cpf ?? '',
+        institution: row.contact?.instituicao ?? '',
+        campaignId: row.campaign?.id,
+        campaignName: row.campaign?.nome ?? 'Campanha Removida',
         status: row.status,
-        attempts: row.tentativas,
+        attempts: row.tentativas_realizadas,
         lastAttempt: row.ultima_tentativa
           ? new Date(row.ultima_tentativa).toLocaleString('pt-BR')
           : undefined,
-        phone: row.contacts?.telefone ?? '',
+        phone: row.contact?.telefone ?? '',
       }))
 
       setContacts(mappedContacts)
@@ -73,19 +65,14 @@ export const Contacts: React.FC = () => {
     }
   }
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  useEffect(() => { fetchData() }, [])
 
   const isValidCpf = (cpf: string) => cpf.replace(/\D/g, '').length === CPF_DIGIT_COUNT
 
   const handleResetContact = async (id: string) => {
     if (!confirm('Resetar tentativas deste contato?')) return
     try {
-      await supabase
-        .from('campaign_contacts')
-        .update({ tentativas: 0, status: 'pendente', ultima_tentativa: null })
-        .eq('id', id)
+      await fetch(`${API}/api/contacts/${id}/reset`, { method: 'PATCH' })
       setContacts(prev => prev.map(c => c.id === id ? { ...c, attempts: 0, status: 'pendente' } : c))
     } catch {
       alert('Erro ao resetar contato.')
@@ -95,7 +82,7 @@ export const Contacts: React.FC = () => {
   const handleDeleteContact = async (id: string) => {
     if (!confirm('Remover este contato da campanha?')) return
     try {
-      await supabase.from('campaign_contacts').delete().eq('id', id)
+      await fetch(`${API}/api/contacts/${id}`, { method: 'DELETE' })
       setContacts(prev => prev.filter(c => c.id !== id))
     } catch {
       alert('Erro ao excluir contato.')
@@ -109,20 +96,21 @@ export const Contacts: React.FC = () => {
 
     setCreating(true)
     try {
-      await contactApi.import(createForm.campaignId, [{
-        nome: createForm.name,
-        cpf: createForm.cpf,
-        telefone: createForm.phone,
-        instituicao: createForm.institution,
-      }])
+      const res = await fetch(`${API}/api/contacts/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId: createForm.campaignId,
+          contacts: [{ nome: createForm.name, cpf: createForm.cpf, telefone: createForm.phone, instituicao: createForm.institution }],
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
       alert('Contato criado com sucesso!')
       setIsCreateOpen(false)
       setCreateForm({ name: '', cpf: '', phone: '', institution: '', campaignId: '' })
       fetchData()
     } catch (e: any) {
-      alert(e.message?.includes('duplicate')
-        ? 'Erro: Este CPF já está associado a este número de telefone.'
-        : `Erro ao criar contato: ${e.message}`)
+      alert(`Erro ao criar contato: ${e.message}`)
     } finally {
       setCreating(false)
     }
@@ -140,27 +128,22 @@ export const Contacts: React.FC = () => {
 
     const normalizedCpf = editForm.cpf.replace(/\D/g, '')
     const cleanPhone = editForm.phone.replace(/\D/g, '')
-    const normalizedPhone = cleanPhone.length === 12 || cleanPhone.length === 13
-      ? `+${cleanPhone}`
-      : `+55${cleanPhone}`
+    const normalizedPhone = cleanPhone.length === 12 || cleanPhone.length === 13 ? `+${cleanPhone}` : `+55${cleanPhone}`
 
     try {
-      await supabase
-        .from('contacts')
-        .update({ nome: editForm.name, telefone: normalizedPhone, cpf: normalizedCpf })
-        .eq('id', editingContact.contactId)
-
+      const res = await fetch(`${API}/api/contacts/${editingContact.contactId}/contact`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: editForm.name, telefone: normalizedPhone, cpf: normalizedCpf }),
+      })
+      if (!res.ok) throw new Error(await res.text())
       setContacts(prev => prev.map(c =>
-        c.id === editingContact.id
-          ? { ...c, name: editForm.name, phone: normalizedPhone, cpf: normalizedCpf }
-          : c
+        c.id === editingContact.id ? { ...c, name: editForm.name, phone: normalizedPhone, cpf: normalizedCpf } : c
       ))
       setIsEditOpen(false)
       alert('Contato atualizado com sucesso!')
     } catch (e: any) {
-      alert(e.message?.includes('duplicate')
-        ? 'Erro: Este CPF já está associado a este número de telefone.'
-        : 'Erro ao atualizar contato.')
+      alert(`Erro ao atualizar contato: ${e.message}`)
     }
   }
 
@@ -187,19 +170,16 @@ export const Contacts: React.FC = () => {
 
     const formattedData = importPreview
       .map((row: any) => {
-        const normalized: any = {}
-        Object.keys(row).forEach(k => { normalized[k.toLowerCase().trim()] = row[k] })
+        const n: any = {}
+        Object.keys(row).forEach(k => { n[k.toLowerCase().trim()] = row[k] })
         return {
-          nome: normalized['nome'] ?? normalized['name'] ?? normalized['cliente'] ?? 'Sem Nome',
-          cpf: String(normalized['cpf'] ?? normalized['documento'] ?? ''),
-          telefone: String(normalized['telefone'] ?? normalized['celular'] ?? normalized['phone'] ?? ''),
-          instituicao: normalized['instituicao'] ?? normalized['empresa'] ?? '',
+          nome: n['nome'] ?? n['name'] ?? n['cliente'] ?? 'Sem Nome',
+          cpf: String(n['cpf'] ?? n['documento'] ?? ''),
+          telefone: String(n['telefone'] ?? n['celular'] ?? n['phone'] ?? ''),
+          instituicao: n['instituicao'] ?? n['empresa'] ?? '',
         }
       })
-      .filter(r =>
-        r.telefone.replace(/\D/g, '').length > 5 &&
-        r.cpf.replace(/\D/g, '').length === CPF_DIGIT_COUNT
-      )
+      .filter(r => r.telefone.replace(/\D/g, '').length > 5 && r.cpf.replace(/\D/g, '').length === CPF_DIGIT_COUNT)
 
     if (!formattedData.length) return alert("Nenhum contato válido. Verifique as colunas 'nome', 'telefone' e 'cpf'.")
 
@@ -209,16 +189,16 @@ export const Contacts: React.FC = () => {
     try {
       const BATCH_SIZE = 2000
       const totalBatches = Math.ceil(formattedData.length / BATCH_SIZE)
-
       for (let i = 0; i < formattedData.length; i += BATCH_SIZE) {
         const batchNumber = Math.floor(i / BATCH_SIZE) + 1
-        setImportProgress({
-          pct: Math.round((batchNumber - 1) / totalBatches * 100),
-          label: `Processando lote ${batchNumber} de ${totalBatches}...`,
+        setImportProgress({ pct: Math.round((batchNumber - 1) / totalBatches * 100), label: `Processando lote ${batchNumber} de ${totalBatches}...` })
+        const res = await fetch(`${API}/api/contacts/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaignId: importCampaignId, contacts: formattedData.slice(i, i + BATCH_SIZE) }),
         })
-        await contactApi.import(importCampaignId, formattedData.slice(i, i + BATCH_SIZE))
+        if (!res.ok) throw new Error(await res.text())
       }
-
       setImportProgress({ pct: 100, label: 'Importação concluída.' })
       alert(`Sucesso! ${formattedData.length} contatos importados.`)
       setIsImportOpen(false)
@@ -228,9 +208,7 @@ export const Contacts: React.FC = () => {
       fetchData()
     } catch (e: any) {
       setImportProgress(null)
-      alert(e.message?.includes('duplicate')
-        ? 'Erro: Alguns contatos já estão cadastrados com este CPF+Telefone.'
-        : `Erro na importação: ${e.message}`)
+      alert(`Erro na importação: ${e.message}`)
     } finally {
       setImporting(false)
     }
@@ -267,12 +245,7 @@ export const Contacts: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
-            <Input
-              icon={Search}
-              placeholder="Buscar por nome, telefone ou CPF..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+            <Input icon={Search} placeholder="Buscar por nome, telefone ou CPF..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <select
             className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
@@ -323,36 +296,20 @@ export const Contacts: React.FC = () => {
                     <td className="px-4 py-3 font-mono text-xs">{contact.phone}</td>
                     <td className="px-4 py-3 truncate max-w-[150px]">{contact.campaignName}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={
-                        contact.status === 'concluido' ? 'success' :
-                        contact.status === 'falhou' ? 'danger' :
-                        contact.status === 'em_andamento' ? 'primary' : 'neutral'
-                      }>
+                      <Badge variant={contact.status === 'concluido' ? 'success' : contact.status === 'falhou' ? 'danger' : contact.status === 'em_andamento' ? 'primary' : 'neutral'}>
                         {contact.status}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-center">{contact.attempts}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleResetContact(contact.id)}
-                          className="p-1.5 hover:bg-blue-100 rounded text-blue-500 transition-colors"
-                          title="Resetar Tentativas"
-                        >
+                        <button onClick={() => handleResetContact(contact.id)} className="p-1.5 hover:bg-blue-100 rounded text-blue-500 transition-colors" title="Resetar Tentativas">
                           <RotateCw className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => openEditModal(contact)}
-                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-500 transition-colors"
-                          title="Editar"
-                        >
+                        <button onClick={() => openEditModal(contact)} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-500 transition-colors" title="Editar">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteContact(contact.id)}
-                          className="p-1.5 hover:bg-red-100 rounded text-slate-400 hover:text-red-600 transition-colors"
-                          title="Remover"
-                        >
+                        <button onClick={() => handleDeleteContact(contact.id)} className="p-1.5 hover:bg-red-100 rounded text-slate-400 hover:text-red-600 transition-colors" title="Remover">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -369,106 +326,86 @@ export const Contacts: React.FC = () => {
             <p className="text-xs text-slate-500 font-mono">{rangeStart}–{rangeEnd} de {filteredContacts.length}</p>
             <div className="flex items-center gap-1">
               {PAGE_SIZE_OPTIONS.map(size => (
-                <button
-                  key={size}
-                  onClick={() => { setPageSize(size); setCurrentPage(1) }}
-                  className={`px-2.5 py-1 rounded text-xs font-semibold ${pageSize === size ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'}`}
-                >
+                <button key={size} onClick={() => { setPageSize(size); setCurrentPage(1) }}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold ${pageSize === size ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'}`}>
                   {size}
                 </button>
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-1 rounded text-xs bg-slate-100 dark:bg-slate-800 disabled:opacity-40">← Anterior</button>
-              <span className="text-xs font-mono">{safePage} / {totalPages}</span>
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-3 py-1 rounded text-xs bg-slate-100 dark:bg-slate-800 disabled:opacity-40">Próxima →</button>
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-1 rounded text-xs bg-slate-100 dark:bg-slate-800 disabled:opacity-40">←</button>
+              <span className="text-xs text-slate-500">{safePage} / {totalPages}</span>
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-3 py-1 rounded text-xs bg-slate-100 dark:bg-slate-800 disabled:opacity-40">→</button>
             </div>
           </div>
         )}
       </Card>
 
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Novo Contato" maxWidth="max-w-md">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Campanha</label>
-            <select
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-              value={createForm.campaignId}
-              onChange={e => setCreateForm({ ...createForm, campaignId: e.target.value })}
-            >
-              <option value="">Selecione...</option>
+      {isCreateOpen && (
+        <Modal title="Novo Contato" onClose={() => setIsCreateOpen(false)}>
+          <div className="space-y-4">
+            <Input label="Nome" value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} />
+            <Input label="CPF (só números)" value={createForm.cpf} onChange={e => setCreateForm(f => ({ ...f, cpf: e.target.value }))} />
+            <Input label="Telefone" value={createForm.phone} onChange={e => setCreateForm(f => ({ ...f, phone: e.target.value }))} />
+            <Input label="Instituição" value={createForm.institution} onChange={e => setCreateForm(f => ({ ...f, institution: e.target.value }))} />
+            <select className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+              value={createForm.campaignId} onChange={e => setCreateForm(f => ({ ...f, campaignId: e.target.value }))}>
+              <option value="">Selecione uma campanha</option>
               {campaignsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+              <Button variant="primary" onClick={handleCreateSubmit} disabled={creating}>
+                {creating ? 'Criando...' : 'Criar Contato'}
+              </Button>
+            </div>
           </div>
-          <Input label="Nome do Cliente" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} />
-          <Input label="CPF *" placeholder="00000000000" value={createForm.cpf} onChange={e => setCreateForm({ ...createForm, cpf: e.target.value })} />
-          <Input label="Telefone (com DDD)" placeholder="31999999999" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} />
-          <Input label="Instituição (Opcional)" value={createForm.institution} onChange={e => setCreateForm({ ...createForm, institution: e.target.value })} />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-            <Button icon={Plus} onClick={handleCreateSubmit} disabled={creating}>
-              {creating ? 'Salvando...' : 'Adicionar'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
-      <Modal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} title="Importar Contatos" maxWidth="max-w-xl">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Campanha de Destino</label>
-            <select
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-              value={importCampaignId}
-              onChange={e => setImportCampaignId(e.target.value)}
-            >
-              <option value="">Selecione...</option>
+      {isEditOpen && editingContact && (
+        <Modal title="Editar Contato" onClose={() => setIsEditOpen(false)}>
+          <div className="space-y-4">
+            <Input label="Nome" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+            <Input label="CPF (só números)" value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value }))} />
+            <Input label="Telefone" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
+              <Button variant="primary" onClick={handleSaveEdit}>Salvar</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {isImportOpen && (
+        <Modal title="Importar Contatos" onClose={() => setIsImportOpen(false)}>
+          <div className="space-y-4">
+            <select className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+              value={importCampaignId} onChange={e => setImportCampaignId(e.target.value)}>
+              <option value="">Selecione a campanha de destino</option>
               {campaignsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-          </div>
-          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 transition-colors">
-            <Upload className="w-8 h-8 mb-2 text-slate-400" />
-            <p className="text-sm text-slate-500">Clique para enviar XLSX ou CSV</p>
-            <p className="text-xs text-slate-400">Colunas obrigatórias: nome, telefone, cpf</p>
-            <input type="file" className="hidden" accept=".csv,.xlsx,.xls" onChange={handleFileChange} />
-          </label>
-          {importFile && (
-            <div className="text-sm text-green-600 flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
-              {importFile.name} ({importPreview.length} linhas)
-            </div>
-          )}
-          {importing && importProgress && (
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>{importProgress.label}</span>
-                <span className="font-mono font-semibold text-primary">{importProgress.pct}%</span>
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} className="block w-full text-sm text-slate-500" />
+            {importPreview.length > 0 && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">{importPreview.length} registros detectados no arquivo.</p>
+            )}
+            {importProgress && (
+              <div className="space-y-1">
+                <div className="w-full bg-slate-200 rounded-full h-2">
+                  <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${importProgress.pct}%` }} />
+                </div>
+                <p className="text-xs text-slate-500">{importProgress.label}</p>
               </div>
-              <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${importProgress.pct}%` }} />
-              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsImportOpen(false)}>Cancelar</Button>
+              <Button variant="primary" onClick={handleImportSubmit} disabled={importing}>
+                {importing ? 'Importando...' : 'Importar'}
+              </Button>
             </div>
-          )}
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setIsImportOpen(false)} disabled={importing}>Cancelar</Button>
-            <Button onClick={handleImportSubmit} disabled={!importFile || !importCampaignId || importing}>
-              {importing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processando...</> : 'Importar'}
-            </Button>
           </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Editar Contato" maxWidth="max-w-md">
-        <div className="space-y-4">
-          <Input label="Nome" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
-          <Input label="CPF *" value={editForm.cpf} onChange={e => setEditForm({ ...editForm, cpf: e.target.value })} />
-          <Input label="Telefone" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
-            <Button icon={Save} onClick={handleSaveEdit}>Salvar</Button>
-          </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
     </div>
   )
 }
