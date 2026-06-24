@@ -30,3 +30,4 @@ COPY --from=frontend-build /app/dist ./public
 COPY backend/prisma ./prisma
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js 2>&1"]
+CMD ["sh", "-c", "npx prisma migrate deploy && echo 'Iniciando servidor...' && node dist/server.js 2>&1"]
