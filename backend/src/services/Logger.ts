@@ -1,4 +1,5 @@
 import { LogRepository, LogLevel } from '../repositories/LogRepository.js'
+import { publishRealtimeEvent } from '../realtime/events.js'
 
 export class Logger {
   private static repository = new LogRepository()
@@ -30,5 +31,6 @@ export class Logger {
     details?: Record<string, unknown>
   ): Promise<void> {
     await this.repository.insert({ level, category, message, details: details ?? null })
+    await publishRealtimeEvent('logs:changed', { level, category, message })
   }
 }

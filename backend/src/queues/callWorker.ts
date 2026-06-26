@@ -4,6 +4,7 @@ import { VapiDispatcher } from '../services/VapiDispatcher.js'
 import { CampaignRepository } from '../repositories/CampaignRepository.js'
 import { CALL_QUEUE_NAME, CallJobData } from './callQueue.js'
 import { env } from '../config/env.js'
+import { publishRealtimeEvent } from '../realtime/events.js'
 
 const campaignRepository = new CampaignRepository()
 const vapiDispatcher = new VapiDispatcher()
@@ -25,6 +26,12 @@ const worker = new Worker<CallJobData>(
       data.campaignContactId,
       data.attemptNumber
     )
+    await publishRealtimeEvent('contacts:changed', {
+      campaignId: data.campaignId,
+      campaignContactId: data.campaignContactId,
+      status: 'em_andamento',
+    })
+    await publishRealtimeEvent('campaigns:changed', { campaignId: data.campaignId })
 
     console.log(`[worker] job ${job.id} concluído com sucesso`)
   },
@@ -36,6 +43,14 @@ const worker = new Worker<CallJobData>(
 
 worker.on('failed', (job, error) => {
   console.error(`[worker] job ${job?.id} falhou:`, error.message)
+  if (job?.data) {
+    publishRealtimeEvent('logs:changed', {
+      category: 'Worker',
+      message: error.message,
+      campaignId: job.data.campaignId,
+      campaignContactId: job.data.campaignContactId,
+    })
+  }
 })
 
 worker.on('error', (error) => {

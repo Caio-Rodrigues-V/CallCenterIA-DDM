@@ -1,6 +1,7 @@
 // backend/src/repositories/LogRepository.ts
 import { prisma } from '../lib/prisma.js'
 import { AppError } from '../errors/AppError.js'
+import { Prisma } from '@prisma/client'
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'success'
 
@@ -28,7 +29,12 @@ export class LogRepository {
           level: input.level,
           category: input.category,
           message: input.message,
-          details: input.details ?? undefined,
+          details:
+            input.details === undefined
+              ? undefined
+              : input.details === null
+                ? Prisma.JsonNull
+                : (input.details as Prisma.InputJsonValue),
         },
       })
     } catch (error) {

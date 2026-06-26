@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma.js'
 import { env } from '../config/env.js'
 import { AppError } from '../errors/AppError.js'
 import { Logger } from '../services/Logger.js'
+import { publishRealtimeEvent } from '../realtime/events.js'
 
 const router = Router()
 const campaignRepository = new CampaignRepository()
@@ -50,6 +51,8 @@ router.post('/', async (req, res, next) => {
         ativa: false,
       },
     })
+
+    await publishRealtimeEvent('campaigns:changed', { campaignId: campaign.id, action: 'created' })
 
     res.status(201).json(campaign)
   } catch (error) {
@@ -108,6 +111,8 @@ router.post('/start', async (req, res, next) => {
       campaignId,
       totalEnqueued: jobs.length,
     })
+    await publishRealtimeEvent('campaigns:changed', { campaignId, action: 'started', totalEnqueued: jobs.length })
+    await publishRealtimeEvent('contacts:changed', { campaignId })
 
     activeCampaignRuns.delete(campaignId)
 
@@ -128,6 +133,7 @@ router.patch('/:id/toggle', async (req, res, next) => {
 
   try {
     await campaignRepository.toggleActive(id, active)
+    await publishRealtimeEvent('campaigns:changed', { campaignId: id, action: 'toggle', active })
     res.json({ success: true })
   } catch (error) {
     next(error)

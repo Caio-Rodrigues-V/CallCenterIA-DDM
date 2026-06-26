@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Badge } from '../components/ui'
-import { Search, Play, ExternalLink, RefreshCw, Loader2, Phone, Activity, UserCheck, Voicemail } from 'lucide-react'
+import { Card, Badge, Button } from '../components/ui'
+import { Play, ExternalLink, RefreshCw, Loader2, Phone, Activity, UserCheck, Voicemail, Download, FileText } from 'lucide-react'
 import { Call } from '../types'
 import { callApi } from '../services/api'
 import { CallDetailsModal } from '../components/CallDetailsModal'
+import { useRealtimeRefresh } from '../services/realtime'
+
+const API = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export const Calls: React.FC = () => {
   const [calls, setCalls] = useState<Call[]>([])
@@ -35,6 +38,7 @@ export const Calls: React.FC = () => {
   useEffect(() => {
     fetchCalls()
   }, [])
+  useRealtimeRefresh(['calls:changed'], () => fetchCalls())
 
   const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>) =>
     (value: string) => {
@@ -79,6 +83,10 @@ export const Calls: React.FC = () => {
     } catch (error) {
       console.error('[Calls] erro ao buscar detalhes:', error)
     }
+  }
+
+  const downloadCsv = (path: string) => {
+    window.open(`${API}${path}`, '_blank')
   }
 
   return (
@@ -154,9 +162,17 @@ export const Calls: React.FC = () => {
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
-          <span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-600 dark:text-slate-400">
-            {filteredCalls.length} RECS
-          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" icon={FileText} onClick={() => downloadCsv('/api/calls/export/transcripts')}>
+              Transcrições
+            </Button>
+            <Button variant="outline" size="sm" icon={Download} onClick={() => downloadCsv('/api/calls/export/csv')}>
+              Ligações
+            </Button>
+            <span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-600 dark:text-slate-400">
+              {filteredCalls.length} RECS
+            </span>
+          </div>
         </div>
 
         {loading ? (
