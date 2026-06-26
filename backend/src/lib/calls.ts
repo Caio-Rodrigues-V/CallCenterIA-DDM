@@ -1,7 +1,6 @@
 // backend/src/lib/calls.ts
 import { env } from '../config/env.js'
 import { prisma } from './prisma.js'
-import { Prisma } from '@prisma/client'
 
 const QUEUED_REUSE_WINDOW_MS = 30 * 60 * 1000
 
@@ -61,7 +60,7 @@ export async function createQueuedCallRecord(input: QueuedCallInput): Promise<st
           campaign_contact_id: input.campaignContactId,
           vapi_call_id: null,
           started_at: null,
-          metadata_raw: { equals: Prisma.DbNull },
+          metadata_raw: { equals: null as any },
           created_at: { gte: reuseWindowStart },
         },
         orderBy: { created_at: 'desc' },

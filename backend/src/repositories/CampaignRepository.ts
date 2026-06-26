@@ -49,7 +49,7 @@ export class CampaignRepository {
     try {
       const campaigns = await prisma.campaign.findMany({ orderBy: { created_at: 'desc' } })
       const campaignsWithCounts = await Promise.all(
-        campaigns.map(async (campaign) => {
+        campaigns.map(async (campaign: any) => {
           const [totalContacts, pendingContacts, completedContacts, failedContacts, inProgressContacts] =
             await Promise.all([
               prisma.campaignContact.count({ where: { campaign_id: campaign.id } }),

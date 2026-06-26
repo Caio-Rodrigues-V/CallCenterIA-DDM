@@ -25,9 +25,9 @@ const getAgreementRows = async (query: { agent?: string; campaignId?: string }) 
   })
 
   return calls
-    .filter(call => !query.agent || call.assistant_id === query.agent)
-    .filter(call => !query.campaignId || call.campaign_contact?.campaign_id === query.campaignId)
-    .map(call => {
+    .filter((call: any) => !query.agent || call.assistant_id === query.agent)
+    .filter((call: any) => !query.campaignId || call.campaign_contact?.campaign_id === query.campaignId)
+    .map((call: any) => {
       const hasAgreement = hasAgreementSignal({
         transcript: call.transcript,
         summary: call.summary,
@@ -117,7 +117,7 @@ router.get('/agreements', async (req, res, next) => {
       campaignId: req.query.campaignId as string | undefined,
     })
 
-    const totals = rows.reduce((acc, row) => ({
+    const totals = rows.reduce((acc: any, row: any) => ({
       chamadas_discadas: acc.chamadas_discadas + row.chamadas_discadas,
       chamadas_atendidas: acc.chamadas_atendidas + row.chamadas_atendidas,
       acordos_fechados: acc.acordos_fechados + row.acordos_fechados,
@@ -140,7 +140,7 @@ router.get('/agreements', async (req, res, next) => {
       ? Math.round((totals.acordos_fechados / totals.chamadas_atendidas) * 100)
       : 0
 
-    const agents = Array.from(new Set(rows.map(row => row.agente_id))).filter(Boolean).sort()
+    const agents = Array.from(new Set(rows.map((row: any) => row.agente_id))).filter(Boolean).sort()
 
     res.json({
       ...totals,
@@ -161,7 +161,7 @@ router.get('/agreements/export', async (req, res, next) => {
       campaignId: req.query.campaignId as string | undefined,
     })
 
-    sendCsv(res, `acordos-${new Date().toISOString().slice(0, 10)}.csv`, rows.map(row => ({
+    sendCsv(res, `acordos-${new Date().toISOString().slice(0, 10)}.csv`, rows.map((row: any) => ({
       data: row.referencia_data.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       campanha: row.campanha_nome,
       agente: row.agente_id,

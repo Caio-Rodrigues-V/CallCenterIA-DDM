@@ -2,7 +2,6 @@
 import { prisma } from '../lib/prisma.js'
 import { AppError } from '../errors/AppError.js'
 import { LIMITS } from '../constants/index.js'
-import { Prisma } from '@prisma/client'
 
 export interface CallRow {
   id: string
@@ -80,7 +79,7 @@ export class CallRepository {
           campaign_contact_id: campaignContactId,
           vapi_call_id: null,
           started_at: null,
-          metadata_raw: { equals: Prisma.DbNull },
+          metadata_raw: { equals: null as any },
         },
         orderBy: { created_at: 'desc' },
         select: { id: true, campaign_contact_id: true },

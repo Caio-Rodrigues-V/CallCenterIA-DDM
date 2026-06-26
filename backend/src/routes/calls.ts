@@ -97,7 +97,7 @@ router.get('/', async (_req, res, next) => {
 router.get('/export/csv', async (_req, res, next) => {
   try {
     const calls = (await findCalls()).map(mapCall)
-    sendCsv(res, `ligacoes-${new Date().toISOString().slice(0, 10)}.csv`, calls.map(call => ({
+    sendCsv(res, `ligacoes-${new Date().toISOString().slice(0, 10)}.csv`, calls.map((call: any) => ({
       data: call.date,
       campanha: call.campaignName,
       cliente: call.clientName,
@@ -119,7 +119,7 @@ router.get('/export/csv', async (_req, res, next) => {
 router.get('/export/transcripts', async (_req, res, next) => {
   try {
     const calls = (await findCalls()).map(mapCall)
-    sendCsv(res, `transcricoes-${new Date().toISOString().slice(0, 10)}.csv`, calls.map(call => ({
+    sendCsv(res, `transcricoes-${new Date().toISOString().slice(0, 10)}.csv`, calls.map((call: any) => ({
       data: call.date,
       campanha: call.campaignName,
       cliente: call.clientName,
