@@ -5,6 +5,7 @@ import { CampaignRepository } from '../repositories/CampaignRepository.js'
 import { CALL_QUEUE_NAME, CallJobData } from './callQueue.js'
 import { env } from '../config/env.js'
 import { publishRealtimeEvent } from '../realtime/events.js'
+import { createQueuedCallRecord } from '../lib/calls.js'
 
 const campaignRepository = new CampaignRepository()
 const vapiDispatcher = new VapiDispatcher()
@@ -15,6 +16,16 @@ const worker = new Worker<CallJobData>(
     const { data } = job
 
     console.log(`[worker] processando job ${job.id} — contato ${data.contactId}`)
+
+    const queuedCallId = await createQueuedCallRecord({
+      campaignContactId: data.campaignContactId,
+      customerNumber: data.customerNumber,
+      customerName: data.customerName,
+      customerCpf: data.customerCpf,
+      assistantId: data.assistantId,
+      phoneNumberId: data.phoneNumberId,
+    })
+    await publishRealtimeEvent('calls:changed', { callId: queuedCallId, status: 'queued' })
 
     const result = await vapiDispatcher.dispatch(data)
 

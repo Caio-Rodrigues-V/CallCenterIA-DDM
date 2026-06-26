@@ -46,7 +46,9 @@ export class VapiDispatcher {
       customerCpf: input.customerCpf,
       assistantId: input.assistantId,
       phoneNumberId: input.phoneNumberId,
+      phoneId: input.phoneNumberId,
       callbackUrl: input.callbackUrl,
+      serverUrl: input.callbackUrl,
       tipoTelefonia: 'vapi',
     }
   }
