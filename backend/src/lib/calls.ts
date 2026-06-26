@@ -64,6 +64,14 @@ export async function createQueuedCallRecord(input: QueuedCallInput): Promise<st
           metadata_raw: Prisma.DbNull,
           created_at: { gte: reuseWindowStart },
         },
+        orderBy: { created_at: 'desc' },
+        select: { id: true },
+      })
+
+      if (existingQueued?.id) {
+        await prisma.call.update({
+          where: { id: existingQueued.id },
+          data: {
             customer_number: input.customerNumber ?? null,
             assistant_id: input.assistantId ?? null,
             phone_number_id: input.phoneNumberId ?? null,
