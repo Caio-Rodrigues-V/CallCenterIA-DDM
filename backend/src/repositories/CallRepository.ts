@@ -57,6 +57,19 @@ export interface UpdateCallInput {
 }
 
 export class CallRepository {
+  async findReferenceById(
+    callId: string,
+  ): Promise<{ id: string; campaign_contact_id: string | null } | null> {
+    try {
+      return await prisma.call.findUnique({
+        where: { id: callId },
+        select: { id: true, campaign_contact_id: true },
+      })
+    } catch (error) {
+      throw AppError.internal('Erro ao buscar chamada por id', error, { callId })
+    }
+  }
+
   async findByVapiCallId(
     vapiCallId: string,
   ): Promise<{ id: string; campaign_contact_id: string | null } | null> {

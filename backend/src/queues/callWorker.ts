@@ -27,7 +27,10 @@ const worker = new Worker<CallJobData>(
     })
     await publishRealtimeEvent('calls:changed', { callId: queuedCallId, status: 'queued' })
 
-    const result = await vapiDispatcher.dispatch(data)
+    const result = await vapiDispatcher.dispatch({
+      ...data,
+      callRecordId: queuedCallId,
+    })
 
     if (!result.success) {
       throw new Error(`Dispatch falhou: ${result.error} (HTTP ${result.statusCode})`)

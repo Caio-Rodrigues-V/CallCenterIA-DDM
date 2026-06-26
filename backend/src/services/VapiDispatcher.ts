@@ -2,6 +2,7 @@ import { env } from '../config/env.js'
 import { AppError } from '../errors/AppError.js'
 
 export interface DispatchCallInput {
+  callRecordId?: string | null
   contactId: string
   campaignContactId: string
   campaignId: string
@@ -38,6 +39,7 @@ export class VapiDispatcher {
   private buildN8nPayload(input: DispatchCallInput): Record<string, unknown> {
     return {
       contactId: input.contactId,
+      callRecordId: input.callRecordId,
       campaignContactId: input.campaignContactId,
       campaignId: input.campaignId,
       customerNumber: input.customerNumber,
@@ -49,6 +51,13 @@ export class VapiDispatcher {
       phoneId: input.phoneNumberId,
       callbackUrl: input.callbackUrl,
       serverUrl: input.callbackUrl,
+      metadata: {
+        callRecordId: input.callRecordId,
+        contactId: input.contactId,
+        campaignContactId: input.campaignContactId,
+        campaignId: input.campaignId,
+        cpf: input.customerCpf,
+      },
       tipoTelefonia: 'vapi',
     }
   }

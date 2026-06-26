@@ -75,6 +75,6 @@ export function classifyCallOutcome(input: ClassificationInput): {
 
 export function mapDashboardStatus(status: string): 'Concluída' | 'Falhou' | 'Em andamento' {
   if (['completed', 'scheduled'].includes(status)) return 'Concluída'
-  if (['queued', 'in-progress', 'em_andamento'].includes(status)) return 'Em andamento'
+  if (['queued', 'in-progress', 'em_andamento', 'callback-received', 'status-update'].includes(status)) return 'Em andamento'
   return 'Falhou'
 }

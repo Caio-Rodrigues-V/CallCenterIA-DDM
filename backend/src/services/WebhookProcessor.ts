@@ -20,26 +20,39 @@ export class WebhookProcessor {
   async processVapiCallback(rawPayload: VapiCallbackPayload): Promise<{ callId: string }> {
     const payload = this.unwrapPayload(rawPayload)
 
-    if (payload.type !== 'end-of-call-report') {
-      throw AppError.badRequest('Tipo de evento ignorado', { type: payload.type })
-    }
-
-    const call = payload.call as Record<string, unknown>
+    const call = this.extractCall(payload)
     const metadata = this.extractMetadata(call, payload.metadata)
-    const vapiCallId = call.id as string
+    const vapiCallId = typeof call.id === 'string' ? call.id : null
 
     const existingCall = await this.findOrCreateCallRecord(vapiCallId, metadata)
-    const callData = this.extractCallData(call, metadata, payload as unknown as Record<string, unknown>)
+    const isFinalReport = payload.type === 'end-of-call-report' && call.startedAt && call.endedAt
 
-    await this.callRepository.update(existingCall.id, callData)
-    await Logger.success('Webhook', 'Callback VAPI processado', { callId: existingCall.id })
-    await this.updateCampaignContactStatus(existingCall, call, callData)
+    if (isFinalReport) {
+      const callData = this.extractCallData(call, metadata, payload as unknown as Record<string, unknown>)
+      await this.callRepository.update(existingCall.id, callData)
+      await Logger.success('Webhook', 'Callback VAPI processado', { callId: existingCall.id, type: payload.type })
+      await this.updateCampaignContactStatus(existingCall, call, callData)
+    } else {
+      await this.callRepository.update(existingCall.id, this.extractPartialCallData(call, metadata, payload as unknown as Record<string, unknown>))
+      await Logger.info('Webhook', 'Callback VAPI salvo parcialmente', {
+        callId: existingCall.id,
+        type: payload.type,
+        vapiCallId,
+      })
+    }
 
     return { callId: existingCall.id }
   }
 
   private unwrapPayload(payload: VapiCallbackPayload): VapiCallbackPayload {
     return (payload as any).message ?? payload
+  }
+
+  private extractCall(payload: VapiCallbackPayload): Record<string, unknown> {
+    const anyPayload = payload as any
+    if (anyPayload.call && typeof anyPayload.call === 'object') return anyPayload.call
+    if (anyPayload.id || anyPayload.startedAt || anyPayload.endedAt) return anyPayload
+    return {}
   }
 
   private extractMetadata(
@@ -54,18 +67,29 @@ export class WebhookProcessor {
   }
 
   private async findOrCreateCallRecord(
-    vapiCallId: string,
+    vapiCallId: string | null,
     metadata: Record<string, unknown>,
   ): Promise<{ id: string; campaign_contact_id: string | null }> {
-    const existingByVapiId = await this.callRepository.findByVapiCallId(vapiCallId)
-    if (existingByVapiId) return existingByVapiId
+    const callRecordId = metadata.callRecordId as string | undefined
+    if (callRecordId) {
+      const existingById = await this.callRepository.findReferenceById(callRecordId)
+      if (existingById) {
+        if (vapiCallId) await this.callRepository.update(existingById.id, { vapiCallId })
+        return existingById
+      }
+    }
+
+    if (vapiCallId) {
+      const existingByVapiId = await this.callRepository.findByVapiCallId(vapiCallId)
+      if (existingByVapiId) return existingByVapiId
+    }
 
     const campaignContactId = metadata.campaignContactId as string | undefined
 
     if (campaignContactId) {
       const orphan = await this.callRepository.findOrphanByCampaignContactId(campaignContactId)
       if (orphan) {
-        await this.callRepository.update(orphan.id, { vapiCallId })
+        if (vapiCallId) await this.callRepository.update(orphan.id, { vapiCallId })
         return orphan
       }
     }
@@ -73,8 +97,31 @@ export class WebhookProcessor {
     return this.callRepository.create({
       vapiCallId,
       campaignContactId: campaignContactId ?? null,
-      status: 'queued',
+      status: 'callback-received',
     })
+  }
+
+  private extractPartialCallData(
+    call: Record<string, unknown>,
+    metadata: Record<string, unknown>,
+    payload: Record<string, unknown>,
+  ) {
+    const status =
+      (call.status as string | undefined) ??
+      (payload.type as string | undefined) ??
+      'callback-received'
+
+    return {
+      vapiCallId: typeof call.id === 'string' ? call.id : undefined,
+      campaignContactId: (metadata.campaignContactId as string) ?? undefined,
+      startedAt: typeof call.startedAt === 'string' ? call.startedAt : undefined,
+      endedAt: typeof call.endedAt === 'string' ? call.endedAt : undefined,
+      endedReason: typeof call.endedReason === 'string' ? call.endedReason : undefined,
+      assistantId: typeof call.assistantId === 'string' ? call.assistantId : undefined,
+      phoneNumberId: typeof call.phoneNumberId === 'string' ? call.phoneNumberId : undefined,
+      metadataRaw: payload,
+      status,
+    }
   }
 
   private extractCallData(
