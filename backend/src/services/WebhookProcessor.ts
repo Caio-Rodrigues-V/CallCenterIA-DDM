@@ -2,13 +2,8 @@
 import { CallRepository } from '../repositories/CallRepository.js'
 import { CampaignRepository } from '../repositories/CampaignRepository.js'
 import { AppError } from '../errors/AppError.js'
-import {
-  TechnicalFailureReasons,
-  SuccessfulEndingReasons,
-  ContactStatus,
-  LIMITS,
-} from '../constants/index.js'
 import { Logger } from './Logger.js'
+import { classifyCallOutcome } from '../lib/callClassification.js'
 
 interface VapiCallbackPayload {
   type: string
@@ -103,9 +98,21 @@ export class WebhookProcessor {
 
     const artifact = (call.artifact as Record<string, unknown>) ?? {}
     const endedReason = call.endedReason as string
-
-    const completedReasons = ['assistant-ended-call', 'customer-ended-call']
-    const callStatus = completedReasons.includes(endedReason) ? 'completed' : endedReason
+    const transcript = (artifact.transcript as string) ?? null
+    const summary = (analysis.summary as string) ?? null
+    const structuredRatingLabel = ((structuredData.rating as any)?.label as string) ?? null
+    const structuredPurpose = (structuredData.purpose as string) ?? null
+    const structuredMainPoints = (structuredData.mainPoints as string) ?? null
+    const outcome = classifyCallOutcome({
+      endedReason,
+      durationSeconds,
+      transcript,
+      summary,
+      successEvaluation,
+      structuredRatingLabel,
+      structuredPurpose,
+      structuredMainPoints,
+    })
 
     return {
       campaignContactId: (metadata.campaignContactId as string) ?? null,
@@ -117,20 +124,20 @@ export class WebhookProcessor {
       custoStt,
       custoTts,
       custoVapi,
-      summary: (analysis.summary as string) ?? null,
+      summary,
       successEvaluation,
-      transcript: (artifact.transcript as string) ?? null,
+      transcript,
       recordingUrl: ((artifact.recording as any)?.url as string) ?? null,
       stereoRecordingUrl: ((artifact.recording as any)?.stereoRecordingUrl as string) ?? null,
       assistantId: (call.assistantId as string) ?? null,
       phoneNumberId: (call.phoneNumberId as string) ?? null,
       structuredName: (structuredData.name as string) ?? null,
-      structuredRatingLabel: ((structuredData.rating as any)?.label as string) ?? null,
+      structuredRatingLabel,
       structuredRatingText: ((structuredData.rating as any)?.text as string) ?? null,
-      structuredPurpose: (structuredData.purpose as string) ?? null,
-      structuredMainPoints: (structuredData.mainPoints as string) ?? null,
+      structuredPurpose,
+      structuredMainPoints,
       metadataRaw: payload as Record<string, unknown>,
-      status: callStatus,
+      status: outcome.status,
     }
   }
 
@@ -153,42 +160,19 @@ export class WebhookProcessor {
     const campaign = await this.campaignRepository.findByCampaignContactId(campaignContactId)
     if (!campaign) return
 
-    const { tentativas_realizadas, max_tentativas } = campaign
-    const maxAttempts = max_tentativas ?? 3
-    const currentAttempts = tentativas_realizadas ?? 0
     const endedReason = call.endedReason as string
 
-    const newStatus = this.determineNewContactStatus({
+    const outcome = classifyCallOutcome({
       successEvaluation: callData.successEvaluation,
       endedReason,
       durationSeconds: callData.durationSeconds ?? 0,
-      currentAttempts,
-      maxAttempts,
+      transcript: callData.transcript,
+      summary: callData.summary,
+      structuredRatingLabel: callData.structuredRatingLabel,
+      structuredPurpose: callData.structuredPurpose,
+      structuredMainPoints: callData.structuredMainPoints,
     })
 
-    await this.campaignRepository.updateContactStatus(campaignContactId, newStatus)
-  }
-
-  private determineNewContactStatus(params: {
-    successEvaluation: string | null
-    endedReason: string
-    durationSeconds: number
-    currentAttempts: number
-    maxAttempts: number
-  }): string {
-    const { successEvaluation, endedReason, durationSeconds, currentAttempts, maxAttempts } = params
-
-    if (successEvaluation === 'true') return ContactStatus.COMPLETED
-
-    const isSuccessfulEnding = (SuccessfulEndingReasons as readonly string[]).includes(endedReason)
-    const hasMinimumDuration = durationSeconds >= LIMITS.MIN_CALL_DURATION_FOR_SUCCESS_SECONDS
-
-    if (isSuccessfulEnding && hasMinimumDuration) return ContactStatus.COMPLETED
-    if (currentAttempts >= maxAttempts) return ContactStatus.FAILED
-
-    const isTechnicalFailure = (TechnicalFailureReasons as readonly string[]).includes(endedReason)
-    if (isTechnicalFailure) return ContactStatus.PENDING
-
-    return ContactStatus.PENDING
+    await this.campaignRepository.updateContactStatus(campaignContactId, outcome.contactStatus)
   }
 }

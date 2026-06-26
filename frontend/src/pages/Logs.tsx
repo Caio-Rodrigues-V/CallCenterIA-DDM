@@ -3,6 +3,7 @@ import { Card, Button, Badge, Input, Modal } from '../components/ui';
 import { Search, Trash2, RefreshCw, AlertTriangle, CheckCircle, Info, XCircle, Code, Terminal } from 'lucide-react';
 import { LogEntry } from '../types';
 import { logService } from '../services/logService';
+import { useRealtimeRefresh } from '../services/realtime';
 
 export const Logs: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -26,6 +27,7 @@ export const Logs: React.FC = () => {
     window.addEventListener('system-log-update', handleUpdate);
     return () => window.removeEventListener('system-log-update', handleUpdate);
   }, []);
+  useRealtimeRefresh(['logs:changed'], () => loadLogs());
 
   const filteredLogs = logs.filter(log => {
     const matchesLevel = filterLevel === 'all' || log.level === filterLevel;

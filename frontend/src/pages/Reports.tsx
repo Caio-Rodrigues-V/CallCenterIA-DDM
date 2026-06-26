@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { Phone, Target, Clock, DollarSign } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts'
+import { useRealtimeRefresh } from '../services/realtime'
 
 const API = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -24,30 +25,32 @@ export const Reports: React.FC = () => {
   const [costData, setCostData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        setLoading(true)
-        const [k, f, t, a, c] = await Promise.all([
-          fetch(`${API}/api/reports/kpis`).then(r => r.json()),
-          fetch(`${API}/api/reports/funnel`).then(r => r.json()),
-          fetch(`${API}/api/reports/termination-reasons`).then(r => r.json()),
-          fetch(`${API}/api/reports/daily-activity`).then(r => r.json()),
-          fetch(`${API}/api/reports/daily-costs`).then(r => r.json()),
-        ])
-        if (k) setKpis(k)
-        if (f) setFunnelData(f)
-        if (t) setTerminationData(t)
-        if (a) setActivityData(a)
-        if (c) setCostData(c)
-      } catch (error) {
-        console.error('[Reports] erro ao buscar dados:', error)
-      } finally {
-        setLoading(false)
-      }
+  const fetchAll = async () => {
+    try {
+      setLoading(true)
+      const [k, f, t, a, c] = await Promise.all([
+        fetch(`${API}/api/reports/kpis`).then(r => r.json()),
+        fetch(`${API}/api/reports/funnel`).then(r => r.json()),
+        fetch(`${API}/api/reports/termination-reasons`).then(r => r.json()),
+        fetch(`${API}/api/reports/daily-activity`).then(r => r.json()),
+        fetch(`${API}/api/reports/daily-costs`).then(r => r.json()),
+      ])
+      if (k) setKpis(k)
+      if (f) setFunnelData(f)
+      if (t) setTerminationData(t)
+      if (a) setActivityData(a)
+      if (c) setCostData(c)
+    } catch (error) {
+      console.error('[Reports] erro ao buscar dados:', error)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchAll()
   }, [])
+  useRealtimeRefresh(['reports:changed', 'calls:changed'], () => fetchAll())
 
   if (loading) {
     return (

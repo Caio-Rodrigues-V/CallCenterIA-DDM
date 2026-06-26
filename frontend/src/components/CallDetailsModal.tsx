@@ -1,7 +1,7 @@
 import React from 'react';
-import { Modal, Badge } from './ui';
+import { Modal, Badge, Button } from './ui';
 import { Call } from '../types';
-import { Clock, Phone, User, FileText, Activity, DollarSign, Calendar, MessageSquare, Play, Volume2, Mic, Speaker, Server } from 'lucide-react';
+import { Clock, FileText, Activity, DollarSign, MessageSquare, Play, Volume2, Mic, Speaker, Server, Download } from 'lucide-react';
 
 interface CallDetailsModalProps {
   isOpen: boolean;
@@ -101,6 +101,24 @@ const renderMarkdown = (text: string): React.ReactElement => {
 
 export const CallDetailsModal: React.FC<CallDetailsModalProps> = ({ isOpen, onClose, call }) => {
   if (!call) return null;
+
+  const downloadTranscript = () => {
+    const content = [
+      `Cliente: ${call.clientName || 'Desconhecido'}`,
+      `Telefone: ${call.phone || '-'}`,
+      `Campanha: ${call.campaignName || '-'}`,
+      `Data: ${call.date || '-'}`,
+      '',
+      call.transcript || 'Transcrição não disponível.',
+    ].join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `transcricao-${call.id}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   // Extract analysis data safely
   const analysis = call.analysis || {};
@@ -282,9 +300,14 @@ export const CallDetailsModal: React.FC<CallDetailsModalProps> = ({ isOpen, onCl
 
         {/* Transcrição */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-          <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase mb-3 flex items-center gap-2">
-            <MessageSquare className="w-4 h-4" /> Transcrição Completa
-          </h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" /> Transcrição Completa
+            </h4>
+            <Button variant="outline" size="sm" icon={Download} onClick={downloadTranscript}>
+              Exportar
+            </Button>
+          </div>
           <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg max-h-60 overflow-y-auto font-mono text-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
             {call.transcript || "Transcrição não disponível."}
           </div>

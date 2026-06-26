@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js'
 import { ContactRepository } from '../repositories/ContactRepository.js'
 import { ContactImporter } from '../services/ContactImporter.js'
 import { AppError } from '../errors/AppError.js'
+import { publishRealtimeEvent } from '../realtime/events.js'
 
 const router = Router()
 const contactRepository = new ContactRepository()
@@ -38,6 +39,8 @@ router.post('/import', async (req, res, next) => {
     if (!campaignId) throw AppError.badRequest('campaignId é obrigatório')
     if (!contacts?.length) throw AppError.badRequest('contacts é obrigatório')
     const result = await contactImporter.importForCampaign(campaignId, contacts)
+    await publishRealtimeEvent('contacts:changed', { campaignId, action: 'import', linked: result.linked })
+    await publishRealtimeEvent('campaigns:changed', { campaignId })
     res.json(result)
   } catch (error) {
     next(error)
@@ -51,6 +54,8 @@ router.patch('/:id/reset', async (req, res, next) => {
       where: { id: req.params.id },
       data: { tentativas_realizadas: 0, status: 'pendente', ultima_tentativa: null },
     })
+    await publishRealtimeEvent('contacts:changed', { campaignContactId: req.params.id, action: 'reset' })
+    await publishRealtimeEvent('campaigns:changed', {})
     res.json({ success: true })
   } catch (error) {
     next(error)
@@ -61,6 +66,8 @@ router.patch('/:id/reset', async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   try {
     await prisma.campaignContact.delete({ where: { id: req.params.id } })
+    await publishRealtimeEvent('contacts:changed', { campaignContactId: req.params.id, action: 'delete' })
+    await publishRealtimeEvent('campaigns:changed', {})
     res.json({ success: true })
   } catch (error) {
     next(error)
@@ -75,6 +82,7 @@ router.patch('/:contactId/contact', async (req, res, next) => {
       where: { id: req.params.contactId },
       data: { nome, telefone, cpf },
     })
+    await publishRealtimeEvent('contacts:changed', { contactId: req.params.contactId, action: 'edit' })
     res.json({ success: true })
   } catch (error) {
     next(error)

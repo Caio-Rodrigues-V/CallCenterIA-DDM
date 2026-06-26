@@ -4,6 +4,7 @@ import { Card, Button, Badge, Modal, Input } from '../components/ui'
 import { Play, Plus, Phone, Users, Clock, RefreshCw, Loader2, TrendingUp } from 'lucide-react'
 import { campaignApi } from '../services/api'
 import { logService } from '../services/logService'
+import { useRealtimeRefresh } from '../services/realtime'
 
 const API = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -42,6 +43,7 @@ export const Campaigns: React.FC = () => {
   }
 
   useEffect(() => { fetchCampaigns() }, [])
+  useRealtimeRefresh(['campaigns:changed', 'contacts:changed'], () => fetchCampaigns())
 
   const handleExecuteCampaign = async (campaign: any) => {
     if (executingId) return

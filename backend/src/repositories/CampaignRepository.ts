@@ -48,7 +48,33 @@ export class CampaignRepository {
   async findAll(): Promise<CampaignRow[]> {
     try {
       const campaigns = await prisma.campaign.findMany({ orderBy: { created_at: 'desc' } })
-      return campaigns as unknown as CampaignRow[]
+      const campaignsWithCounts = await Promise.all(
+        campaigns.map(async (campaign) => {
+          const [totalContacts, pendingContacts, completedContacts, failedContacts, inProgressContacts] =
+            await Promise.all([
+              prisma.campaignContact.count({ where: { campaign_id: campaign.id } }),
+              prisma.campaignContact.count({ where: { campaign_id: campaign.id, status: 'pendente' } }),
+              prisma.campaignContact.count({ where: { campaign_id: campaign.id, status: 'concluido' } }),
+              prisma.campaignContact.count({ where: { campaign_id: campaign.id, status: 'falhou' } }),
+              prisma.campaignContact.count({ where: { campaign_id: campaign.id, status: 'em_andamento' } }),
+            ])
+
+          const successRate =
+            totalContacts > 0 ? Math.round((completedContacts / totalContacts) * 100) : 0
+
+          return {
+            ...campaign,
+            totalContacts,
+            pendingContacts,
+            completedContacts,
+            failedContacts,
+            inProgressContacts,
+            successRate,
+          }
+        }),
+      )
+
+      return campaignsWithCounts as unknown as CampaignRow[]
     } catch (error) {
       throw AppError.internal('Erro ao buscar campanhas', error)
     }

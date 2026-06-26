@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { Award, Star, ThumbsUp, AlertCircle, BrainCircuit, Target } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { useRealtimeRefresh } from '../services/realtime'
 
 const API = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -17,28 +18,30 @@ export const Quality: React.FC = () => {
   const [topObjections, setTopObjections] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetch4 = async () => {
-      try {
-        setLoading(true)
-        const [m, d, c, o] = await Promise.all([
-          fetch(`${API}/api/quality/metrics`).then(r => r.json()),
-          fetch(`${API}/api/quality/rating-distribution`).then(r => r.json()),
-          fetch(`${API}/api/quality/by-campaign`).then(r => r.json()),
-          fetch(`${API}/api/quality/top-objections`).then(r => r.json()),
-        ])
-        if (m) setMetrics(m)
-        if (d) setRatingDistribution(d)
-        if (c) setCampaignQuality(c)
-        if (o) setTopObjections(o)
-      } catch (error) {
-        console.error('[Quality] erro ao buscar dados:', error)
-      } finally {
-        setLoading(false)
-      }
+  const fetch4 = async () => {
+    try {
+      setLoading(true)
+      const [m, d, c, o] = await Promise.all([
+        fetch(`${API}/api/quality/metrics`).then(r => r.json()),
+        fetch(`${API}/api/quality/rating-distribution`).then(r => r.json()),
+        fetch(`${API}/api/quality/by-campaign`).then(r => r.json()),
+        fetch(`${API}/api/quality/top-objections`).then(r => r.json()),
+      ])
+      if (m) setMetrics(m)
+      if (d) setRatingDistribution(d)
+      if (c) setCampaignQuality(c)
+      if (o) setTopObjections(o)
+    } catch (error) {
+      console.error('[Quality] erro ao buscar dados:', error)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetch4()
   }, [])
+  useRealtimeRefresh(['quality:changed', 'calls:changed'], () => fetch4())
 
   if (loading) {
     return (

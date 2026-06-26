@@ -5,6 +5,7 @@ import { Search, Upload, Plus, Trash2, RotateCw, RefreshCw, Edit, Loader2 } from
 import { Contact, Campaign } from '../types'
 import { campaignApi } from '../services/api'
 import { logService } from '../services/logService'
+import { useRealtimeRefresh } from '../services/realtime'
 import * as XLSX from 'xlsx'
 
 const API = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -66,6 +67,7 @@ export const Contacts: React.FC = () => {
   }
 
   useEffect(() => { fetchData() }, [])
+  useRealtimeRefresh(['contacts:changed', 'campaigns:changed'], () => fetchData())
 
   const isValidCpf = (cpf: string) => cpf.replace(/\D/g, '').length === CPF_DIGIT_COUNT
 
