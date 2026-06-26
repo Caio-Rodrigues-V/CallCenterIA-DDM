@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react'
 import { Card, Badge } from '../components/ui'
 import { Database, Link2, Zap } from 'lucide-react'
 
+const API = import.meta.env.VITE_API_BASE_URL ?? ''
+
 export const Settings: React.FC = () => {
   const [apiStatus, setApiStatus] = useState<'checking' | 'ok' | 'error'>('checking')
 
   useEffect(() => {
-    fetch('/api/health')
+    fetch(`${API}/health`)
       .then(res => res.ok ? setApiStatus('ok') : setApiStatus('error'))
       .catch(() => setApiStatus('error'))
   }, [])

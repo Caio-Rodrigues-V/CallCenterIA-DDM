@@ -27,6 +27,10 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'callcenter-ddm-api', ts: new Date().toISOString() })
 })
 
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, service: 'callcenter-ddm-api', ts: new Date().toISOString() })
+})
+
 app.use('/api/campaigns', campaignsRouter)
 app.use('/api/calls', callsRouter)
 app.use('/api/contacts', contactsRouter)
