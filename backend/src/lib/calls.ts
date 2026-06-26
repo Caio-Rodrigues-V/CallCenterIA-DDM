@@ -61,7 +61,7 @@ export async function createQueuedCallRecord(input: QueuedCallInput): Promise<st
           campaign_contact_id: input.campaignContactId,
           vapi_call_id: null,
           started_at: null,
-          metadata_raw: Prisma.DbNull,
+          metadata_raw: { equals: Prisma.DbNull },
           created_at: { gte: reuseWindowStart },
         },
         orderBy: { created_at: 'desc' },

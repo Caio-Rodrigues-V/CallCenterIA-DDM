@@ -93,7 +93,7 @@ export class CallRepository {
           campaign_contact_id: campaignContactId,
           vapi_call_id: null,
           started_at: null,
-          metadata_raw: Prisma.DbNull,
+          metadata_raw: { equals: Prisma.DbNull },
         },
         orderBy: { created_at: 'desc' },
         select: { id: true, campaign_contact_id: true },
