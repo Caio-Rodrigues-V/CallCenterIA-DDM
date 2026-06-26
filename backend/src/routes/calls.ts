@@ -19,16 +19,46 @@ const formatDuration = (seconds: number | null): string => {
   return `${mins}:${String(secs).padStart(2, '0')}`
 }
 
+const asRecord = (value: unknown): Record<string, any> =>
+  value && typeof value === 'object' ? value as Record<string, any> : {}
+
+const extractRawCall = (metadataRaw: unknown): Record<string, any> => {
+  const raw = asRecord(metadataRaw)
+  return asRecord(raw.call ?? raw.message?.call ?? raw.data?.call ?? raw)
+}
+
 const extractAnalysis = (metadataRaw: unknown): Record<string, unknown> => {
-  if (!metadataRaw || typeof metadataRaw !== 'object') return {}
-  const raw = metadataRaw as Record<string, any>
-  return raw.call?.analysis ?? raw.analysis ?? {}
+  const raw = asRecord(metadataRaw)
+  const rawCall = extractRawCall(metadataRaw)
+  return asRecord(rawCall.analysis ?? raw.analysis ?? raw.message?.analysis)
 }
 
 const extractRawSummary = (metadataRaw: unknown): string | undefined => {
-  if (!metadataRaw || typeof metadataRaw !== 'object') return undefined
-  const raw = metadataRaw as Record<string, any>
-  return raw.call?.analysis?.summary ?? raw.analysis?.summary ?? raw.summary
+  const raw = asRecord(metadataRaw)
+  const rawCall = extractRawCall(metadataRaw)
+  return rawCall.analysis?.summary ?? raw.analysis?.summary ?? rawCall.summary ?? raw.summary
+}
+
+const extractRawArtifact = (metadataRaw: unknown): Record<string, any> =>
+  asRecord(extractRawCall(metadataRaw).artifact)
+
+const parseDateValue = (value: unknown): Date | null => {
+  if (!value) return null
+  const parsed = new Date(String(value))
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const calculateDurationSeconds = (startedAt: Date | null, endedAt: Date | null): number | null => {
+  if (!startedAt || !endedAt) return null
+  return Math.max(0, Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000))
+}
+
+const extractCost = (metadataRaw: unknown, typeNames: string[]): number => {
+  const costs = extractRawCall(metadataRaw).costs
+  if (!Array.isArray(costs)) return 0
+  return costs
+    .filter((cost: any) => typeNames.includes(String(cost?.type ?? '').toLowerCase()))
+    .reduce((sum: number, cost: any) => sum + Number(cost?.amount ?? 0), 0)
 }
 
 async function findCalls(limit = 1000) {
@@ -50,38 +80,79 @@ const mapCall = (call: CallWithRelations) => {
   const contact = call.campaign_contact?.contact
   const campaign = call.campaign_contact?.campaign
   const analysis = extractAnalysis(call.metadata_raw)
+  const rawCall = extractRawCall(call.metadata_raw)
+  const artifact = extractRawArtifact(call.metadata_raw)
+  const rawStartedAt = parseDateValue(rawCall.startedAt)
+  const rawEndedAt = parseDateValue(rawCall.endedAt)
+  const startedAt = call.started_at ?? rawStartedAt
+  const endedAt = call.ended_at ?? rawEndedAt
+  const durationSeconds =
+    call.duration_seconds ??
+    (typeof rawCall.durationSeconds === 'number' ? rawCall.durationSeconds : null) ??
+    calculateDurationSeconds(startedAt, endedAt)
+  const recordingUrl =
+    call.recording_url ??
+    artifact.recording?.url ??
+    artifact.recordingUrl ??
+    rawCall.recordingUrl
+  const stereoRecordingUrl =
+    call.stereo_recording_url ??
+    artifact.recording?.stereoRecordingUrl ??
+    artifact.stereoRecordingUrl ??
+    rawCall.stereoRecordingUrl
+  const transcript =
+    call.transcript ??
+    artifact.transcript ??
+    rawCall.transcript
+  const summary =
+    call.summary ??
+    extractRawSummary(call.metadata_raw)
+  const successEvaluation =
+    call.success_evaluation ??
+    (typeof analysis.successEvaluation === 'boolean'
+      ? String(analysis.successEvaluation)
+      : analysis.successEvaluation ? String(analysis.successEvaluation) : undefined)
+  const custoStt = Number(call.custo_stt ?? extractCost(call.metadata_raw, ['stt', 'transcription']))
+  const custoTts = Number(call.custo_tts ?? extractCost(call.metadata_raw, ['tts', 'voice']))
+  const custoVapi = Number(call.custo_vapi ?? extractCost(call.metadata_raw, ['vapi', 'service']))
+  const custoTotal = Number(
+    call.custo_total ??
+    rawCall.cost ??
+    rawCall.costs?.reduce?.((sum: number, cost: any) => sum + Number(cost?.amount ?? 0), 0) ??
+    0,
+  )
 
   return {
     id: call.id,
-    vapiCallId: call.vapi_call_id ?? undefined,
-    date: formatDate(call.started_at ?? call.created_at),
+    vapiCallId: call.vapi_call_id ?? rawCall.id ?? undefined,
+    date: formatDate(startedAt ?? call.created_at),
     campaignName: campaign?.nome ?? 'Direta',
-    clientName: call.structured_name ?? contact?.nome ?? 'Sem nome',
+    clientName: call.structured_name ?? rawCall.analysis?.structuredData?.name ?? rawCall.customer?.name ?? contact?.nome ?? 'Sem nome',
     cpf: contact?.cpf ?? undefined,
-    phone: call.customer_number ?? contact?.telefone ?? '',
-    duration: formatDuration(call.duration_seconds),
+    phone: call.customer_number ?? rawCall.customer?.number ?? contact?.telefone ?? '',
+    duration: formatDuration(durationSeconds),
     status: mapDashboardStatus(call.status),
-    reason: call.ended_reason ?? call.status,
-    success: call.success_evaluation === 'true',
-    cost: Number(call.custo_total ?? 0),
-    custo_stt: Number(call.custo_stt ?? 0),
-    custo_tts: Number(call.custo_tts ?? 0),
-    custo_vapi: Number(call.custo_vapi ?? 0),
-    custo_total: Number(call.custo_total ?? 0),
-    recordingUrl: call.recording_url ?? undefined,
-    stereoRecordingUrl: call.stereo_recording_url ?? undefined,
-    transcript: call.transcript ?? undefined,
-    summary: call.summary ?? undefined,
-    structured_name: call.structured_name ?? undefined,
-    structured_rating_label: call.structured_rating_label ?? undefined,
-    structured_rating_text: call.structured_rating_text ?? undefined,
-    structured_purpose: call.structured_purpose ?? undefined,
-    structured_main_points: call.structured_main_points ?? undefined,
+    reason: call.ended_reason ?? rawCall.endedReason ?? call.status,
+    success: successEvaluation === 'true',
+    cost: custoTotal,
+    custo_stt: custoStt,
+    custo_tts: custoTts,
+    custo_vapi: custoVapi,
+    custo_total: custoTotal,
+    recordingUrl: recordingUrl ?? undefined,
+    stereoRecordingUrl: stereoRecordingUrl ?? undefined,
+    transcript: transcript ?? undefined,
+    summary: summary ?? undefined,
+    structured_name: call.structured_name ?? rawCall.analysis?.structuredData?.name ?? undefined,
+    structured_rating_label: call.structured_rating_label ?? rawCall.analysis?.structuredData?.rating?.label ?? undefined,
+    structured_rating_text: call.structured_rating_text ?? rawCall.analysis?.structuredData?.rating?.text ?? undefined,
+    structured_purpose: call.structured_purpose ?? rawCall.analysis?.structuredData?.purpose ?? undefined,
+    structured_main_points: call.structured_main_points ?? rawCall.analysis?.structuredData?.mainPoints ?? undefined,
     analysis,
     metadata_raw: call.metadata_raw,
-    raw_summary: extractRawSummary(call.metadata_raw),
-    raw_success_evaluation: call.success_evaluation ?? undefined,
-    success_evaluation: call.success_evaluation ?? undefined,
+    raw_summary: summary,
+    raw_success_evaluation: successEvaluation,
+    success_evaluation: successEvaluation,
   }
 }
 
