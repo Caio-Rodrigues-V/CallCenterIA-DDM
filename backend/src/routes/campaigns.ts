@@ -140,4 +140,58 @@ router.patch('/:id/toggle', async (req, res, next) => {
   }
 })
 
+router.delete('/:id', async (req, res, next) => {
+  const { id } = req.params
+
+  try {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      select: { id: true, nome: true },
+    })
+
+    if (!campaign) throw AppError.notFound('Campanha não encontrada')
+
+    const result = await prisma.$transaction(async (tx) => {
+      const campaignContacts = await tx.campaignContact.findMany({
+        where: { campaign_id: id },
+        select: { id: true },
+      })
+      const campaignContactIds = campaignContacts.map((contact) => contact.id)
+
+      const detachedCalls = campaignContactIds.length > 0
+        ? await tx.call.updateMany({
+          where: { campaign_contact_id: { in: campaignContactIds } },
+          data: { campaign_contact_id: null },
+        })
+        : { count: 0 }
+
+      const deletedContacts = await tx.campaignContact.deleteMany({
+        where: { campaign_id: id },
+      })
+
+      await tx.campaign.delete({
+        where: { id },
+      })
+
+      return {
+        detachedCalls: detachedCalls.count,
+        deletedContacts: deletedContacts.count,
+      }
+    })
+
+    await Logger.success('Campaign', `Campanha ${id} excluída`, {
+      campaignId: id,
+      campaignName: campaign.nome,
+      ...result,
+    })
+    await publishRealtimeEvent('campaigns:changed', { campaignId: id, action: 'deleted' })
+    await publishRealtimeEvent('contacts:changed', { campaignId: id, action: 'campaign-deleted' })
+    await publishRealtimeEvent('calls:changed', { campaignId: id, action: 'campaign-deleted' })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    next(error)
+  }
+})
+
 export { router as campaignsRouter }

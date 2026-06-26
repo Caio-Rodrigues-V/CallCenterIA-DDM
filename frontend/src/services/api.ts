@@ -35,6 +35,11 @@ export const campaignApi = {
       method: 'PATCH',
       body: JSON.stringify({ active }),
     }),
+
+  remove: (campaignId: string) =>
+    request<{ success: boolean; detachedCalls: number; deletedContacts: number }>(`/api/campaigns/${campaignId}`, {
+      method: 'DELETE',
+    }),
 }
 
 export const callApi = {

@@ -1,7 +1,7 @@
 // frontend/src/pages/Campaigns.tsx
 import React, { useState, useEffect } from 'react'
 import { Card, Button, Badge, Modal, Input } from '../components/ui'
-import { Play, Plus, Phone, Users, Clock, RefreshCw, Loader2, TrendingUp } from 'lucide-react'
+import { Play, Plus, Phone, Users, Clock, RefreshCw, Loader2, TrendingUp, Trash2 } from 'lucide-react'
 import { campaignApi } from '../services/api'
 import { logService } from '../services/logService'
 import { useRealtimeRefresh } from '../services/realtime'
@@ -26,6 +26,7 @@ export const Campaigns: React.FC = () => {
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [executingId, setExecutingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [form, setForm] = useState(defaultForm)
   const [creating, setCreating] = useState(false)
@@ -65,6 +66,25 @@ export const Campaigns: React.FC = () => {
       fetchCampaigns()
     } catch {
       alert('Erro ao atualizar status.')
+    }
+  }
+
+  const handleDeleteCampaign = async (campaign: any) => {
+    if (deletingId) return
+
+    const confirmed = confirm(
+      `Excluir a campanha "${campaign.nome}"?\n\nOs vinculos de contatos serao removidos, mas o historico de ligacoes sera preservado.`
+    )
+    if (!confirmed) return
+
+    setDeletingId(campaign.id)
+    try {
+      await campaignApi.remove(campaign.id)
+      fetchCampaigns()
+    } catch (error: any) {
+      alert(`Erro ao excluir campanha: ${error.message}`)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -211,18 +231,31 @@ export const Campaigns: React.FC = () => {
                         <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${campaign.ativa ? 'translate-x-4' : 'translate-x-1'}`} />
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <button
-                        onClick={() => handleExecuteCampaign(campaign)}
-                        disabled={executingId === campaign.id}
-                        className="p-1.5 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-md text-green-600 transition-colors"
-                        title="Executar agora"
-                      >
-                        {executingId === campaign.id
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : <Play className="w-3.5 h-3.5 fill-current" />
-                        }
-                      </button>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleExecuteCampaign(campaign)}
+                          disabled={executingId === campaign.id || deletingId === campaign.id}
+                          className="p-1.5 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-md text-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Executar agora"
+                        >
+                          {executingId === campaign.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Play className="w-3.5 h-3.5 fill-current" />
+                          }
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCampaign(campaign)}
+                          disabled={deletingId === campaign.id || executingId === campaign.id}
+                          className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Excluir campanha"
+                        >
+                          {deletingId === campaign.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Trash2 className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
