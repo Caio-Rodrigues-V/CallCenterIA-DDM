@@ -151,12 +151,12 @@ router.delete('/:id', async (req, res, next) => {
 
     if (!campaign) throw AppError.notFound('Campanha não encontrada')
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const campaignContacts = await tx.campaignContact.findMany({
         where: { campaign_id: id },
         select: { id: true },
       })
-      const campaignContactIds = campaignContacts.map((contact) => contact.id)
+      const campaignContactIds = campaignContacts.map((contact: any) => contact.id)
 
       const detachedCalls = campaignContactIds.length > 0
         ? await tx.call.updateMany({

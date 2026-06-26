@@ -1,4 +1,5 @@
 // backend/src/lib/calls.ts
+import { Prisma } from '@prisma/client'
 import { env } from '../config/env.js'
 import { prisma } from './prisma.js'
 
@@ -60,17 +61,9 @@ export async function createQueuedCallRecord(input: QueuedCallInput): Promise<st
           campaign_contact_id: input.campaignContactId,
           vapi_call_id: null,
           started_at: null,
-          metadata_raw: { equals: null as any },
+          metadata_raw: Prisma.DbNull,
           created_at: { gte: reuseWindowStart },
         },
-        orderBy: { created_at: 'desc' },
-        select: { id: true },
-      })
-
-      if (existingQueued?.id) {
-        await prisma.call.update({
-          where: { id: existingQueued.id },
-          data: {
             customer_number: input.customerNumber ?? null,
             assistant_id: input.assistantId ?? null,
             phone_number_id: input.phoneNumberId ?? null,

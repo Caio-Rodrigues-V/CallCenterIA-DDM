@@ -1,5 +1,6 @@
 // backend/src/repositories/CallRepository.ts
 import { prisma } from '../lib/prisma.js'
+import { Prisma } from '@prisma/client'
 import { AppError } from '../errors/AppError.js'
 import { LIMITS } from '../constants/index.js'
 
@@ -92,7 +93,7 @@ export class CallRepository {
           campaign_contact_id: campaignContactId,
           vapi_call_id: null,
           started_at: null,
-          metadata_raw: { equals: null as any },
+          metadata_raw: Prisma.DbNull,
         },
         orderBy: { created_at: 'desc' },
         select: { id: true, campaign_contact_id: true },

@@ -255,7 +255,7 @@ export const Contacts: React.FC = () => {
             onChange={e => { setSelectedCampaignFilter(e.target.value); setCurrentPage(1) }}
           >
             <option value="all">Todas as Campanhas</option>
-            {campaignsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {campaignsList.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
       </Card>
@@ -353,7 +353,7 @@ export const Contacts: React.FC = () => {
             <select className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
               value={createForm.campaignId} onChange={e => setCreateForm(f => ({ ...f, campaignId: e.target.value }))}>
               <option value="">Selecione uma campanha</option>
-              {campaignsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {campaignsList.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
@@ -385,7 +385,7 @@ export const Contacts: React.FC = () => {
             <select className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
               value={importCampaignId} onChange={e => setImportCampaignId(e.target.value)}>
               <option value="">Selecione a campanha de destino</option>
-              {campaignsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {campaignsList.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
             <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} className="block w-full text-sm text-slate-500" />
             {importPreview.length > 0 && (

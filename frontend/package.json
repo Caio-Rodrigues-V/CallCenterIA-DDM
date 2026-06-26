@@ -10,12 +10,12 @@
     "dev:frontend": "vite",
     "predev:frontend": "npm run ensure-env",
     "predev:backend": "npm run ensure-env",
-    "dev:backend": "npm --prefix backend run dev",
+    "dev:backend": "npm --prefix ../backend run dev",
     "predev:stack": "npm run ensure-env",
     "dev:stack": "node scripts/dev-stack.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "build:backend": "npm --prefix backend run build"
+    "build:backend": "npm --prefix ../backend run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "2",
