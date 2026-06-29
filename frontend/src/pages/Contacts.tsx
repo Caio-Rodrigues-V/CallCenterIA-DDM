@@ -174,11 +174,27 @@ export const Contacts: React.FC = () => {
       .map((row: any) => {
         const n: any = {}
         Object.keys(row).forEach(k => { n[k.toLowerCase().trim()] = row[k] })
+        
+        const keys = Object.keys(n)
+        
+        const nomeKey = keys.find(k => k === 'nome' || k === 'name') ||
+                        keys.find(k => k.includes('nome') || k.includes('name')) ||
+                        keys.find(k => k.includes('cliente'))
+                        
+        const cpfKey = keys.find(k => k === 'cpf' || k === 'documento') ||
+                       keys.find(k => k.includes('cpf') || k.includes('documento'))
+                       
+        const telKey = keys.find(k => k === 'telefone' || k === 'celular' || k === 'phone') ||
+                       keys.find(k => k.includes('tel') || k.includes('cel') || k.includes('phone') || k.includes('fone'))
+                       
+        const instKey = keys.find(k => k === 'instituicao' || k === 'empresa') ||
+                        keys.find(k => k.includes('institu') || k.includes('empresa') || k.includes('curso'))
+
         return {
-          nome: n['nome'] ?? n['name'] ?? n['cliente'] ?? 'Sem Nome',
-          cpf: String(n['cpf'] ?? n['documento'] ?? ''),
-          telefone: String(n['telefone'] ?? n['celular'] ?? n['phone'] ?? ''),
-          instituicao: n['instituicao'] ?? n['empresa'] ?? '',
+          nome: nomeKey ? n[nomeKey] : 'Sem Nome',
+          cpf: cpfKey ? String(n[cpfKey]) : '',
+          telefone: telKey ? String(n[telKey]) : '',
+          instituicao: instKey ? n[instKey] : '',
         }
       })
       .filter(r => r.telefone.replace(/\D/g, '').length > 5 && r.cpf.replace(/\D/g, '').length === CPF_DIGIT_COUNT)
