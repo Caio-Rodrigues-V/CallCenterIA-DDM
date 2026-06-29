@@ -9,6 +9,7 @@ interface VapiCallbackPayload {
   type: string
   call?: Record<string, unknown>
   metadata?: Record<string, unknown>
+  [key: string]: any
 }
 
 export class WebhookProcessor {
@@ -25,7 +26,9 @@ export class WebhookProcessor {
     const vapiCallId = typeof call.id === 'string' ? call.id : null
 
     const existingCall = await this.findOrCreateCallRecord(vapiCallId, metadata)
-    const isFinalReport = payload.type === 'end-of-call-report' && call.startedAt && call.endedAt
+    const startedAtVal = (call.startedAt ?? payload.startedAt) as string | undefined
+    const endedAtVal = (call.endedAt ?? payload.endedAt) as string | undefined
+    const isFinalReport = payload.type === 'end-of-call-report' && startedAtVal && endedAtVal
 
     if (isFinalReport) {
       const callData = this.extractCallData(call, metadata, payload as unknown as Record<string, unknown>)
@@ -111,14 +114,18 @@ export class WebhookProcessor {
       (payload.type as string | undefined) ??
       'callback-received'
 
+    const startedAtVal = call.startedAt ?? payload.startedAt
+    const endedAtVal = call.endedAt ?? payload.endedAt
+    const endedReasonVal = call.endedReason ?? payload.endedReason
+
     return {
       vapiCallId: typeof call.id === 'string' ? call.id : undefined,
       campaignContactId: (metadata.campaignContactId as string) ?? undefined,
-      startedAt: typeof call.startedAt === 'string' ? call.startedAt : undefined,
-      endedAt: typeof call.endedAt === 'string' ? call.endedAt : undefined,
-      endedReason: typeof call.endedReason === 'string' ? call.endedReason : undefined,
-      assistantId: typeof call.assistantId === 'string' ? call.assistantId : undefined,
-      phoneNumberId: typeof call.phoneNumberId === 'string' ? call.phoneNumberId : undefined,
+      startedAt: typeof startedAtVal === 'string' ? startedAtVal : undefined,
+      endedAt: typeof endedAtVal === 'string' ? endedAtVal : undefined,
+      endedReason: typeof endedReasonVal === 'string' ? endedReasonVal : undefined,
+      assistantId: typeof (call.assistantId ?? payload.assistantId) === 'string' ? (call.assistantId ?? payload.assistantId) as string : undefined,
+      phoneNumberId: typeof (call.phoneNumberId ?? payload.phoneNumberId) === 'string' ? (call.phoneNumberId ?? payload.phoneNumberId) as string : undefined,
       metadataRaw: payload,
       status,
     }
@@ -129,24 +136,27 @@ export class WebhookProcessor {
     metadata: Record<string, unknown>,
     payload: Record<string, unknown>,
   ) {
-    const startedAt = new Date(call.startedAt as string)
-    const endedAt = new Date(call.endedAt as string)
+    const startedAtVal = (call.startedAt ?? payload.startedAt) as string
+    const endedAtVal = (call.endedAt ?? payload.endedAt) as string
+    const startedAt = new Date(startedAtVal)
+    const endedAt = new Date(endedAtVal)
     const durationSeconds = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000)
 
-    const costs = (call.costs as Array<{ type: string; amount: number }>) ?? []
-    const custoStt = costs.find(c => c.type === 'stt' || c.type === 'transcription')?.amount ?? 0
-    const custoTts = costs.find(c => c.type === 'tts' || c.type === 'voice')?.amount ?? 0
-    const custoVapi = costs.find(c => c.type === 'vapi' || c.type === 'service')?.amount ?? 0
-    const custoTotal = costs.reduce((sum, cost) => sum + (cost.amount ?? 0), 0)
+    const costs = ((call.costs ?? payload.costs) as Array<{ type: string; amount: number } | undefined> | null) ?? []
+    const custoStt = costs.find(c => c?.type === 'stt' || c?.type === 'transcription' || c?.type === 'transcriber')?.amount ?? 0
+    const custoTts = costs.find(c => c?.type === 'tts' || c?.type === 'voice')?.amount ?? 0
+    const custoVapi = costs.find(c => c?.type === 'vapi' || c?.type === 'service')?.amount ?? 0
+    const custoTotal = costs.reduce((sum, cost) => sum + (cost?.amount ?? 0), 0)
 
-    const analysis = (call.analysis as Record<string, unknown>) ?? {}
-    const structuredData = (analysis.structuredData as Record<string, unknown>) ?? {}
+    const anyCall = call as any
+    const analysis = ((anyCall.analysis ?? payload.analysis) as Record<string, unknown> | null) ?? {}
+    const structuredData = (analysis.structuredData as Record<string, unknown> | null) ?? {}
     const successEvaluation = this.extractSuccessEvaluation(analysis)
 
-    const artifact = (call.artifact as Record<string, unknown>) ?? {}
-    const endedReason = call.endedReason as string
-    const transcript = (artifact.transcript as string) ?? null
-    const summary = (analysis.summary as string) ?? null
+    const artifact = ((anyCall.artifact ?? payload.artifact) as Record<string, unknown> | null) ?? {}
+    const endedReason = (call.endedReason ?? payload.endedReason) as string
+    const transcript = (artifact.transcript ?? payload.transcript ?? anyCall.transcript) as string | null
+    const summary = (analysis.summary ?? payload.summary) as string | null
     const structuredRatingLabel = ((structuredData.rating as any)?.label as string) ?? null
     const structuredPurpose = (structuredData.purpose as string) ?? null
     const structuredMainPoints = (structuredData.mainPoints as string) ?? null
@@ -163,8 +173,8 @@ export class WebhookProcessor {
 
     return {
       campaignContactId: (metadata.campaignContactId as string) ?? null,
-      startedAt: call.startedAt as string,
-      endedAt: call.endedAt as string,
+      startedAt: startedAtVal,
+      endedAt: endedAtVal,
       endedReason,
       durationSeconds,
       custoTotal,
@@ -174,10 +184,10 @@ export class WebhookProcessor {
       summary,
       successEvaluation,
       transcript,
-      recordingUrl: ((artifact.recording as any)?.url as string) ?? null,
-      stereoRecordingUrl: ((artifact.recording as any)?.stereoRecordingUrl as string) ?? null,
-      assistantId: (call.assistantId as string) ?? null,
-      phoneNumberId: (call.phoneNumberId as string) ?? null,
+      recordingUrl: ((artifact.recording as any)?.url ?? (payload.recordingUrl as string | undefined)) ?? null,
+      stereoRecordingUrl: ((artifact.recording as any)?.stereoRecordingUrl ?? (payload.stereoRecordingUrl as string | undefined)) ?? null,
+      assistantId: (call.assistantId ?? payload.assistantId) as string | null,
+      phoneNumberId: (call.phoneNumberId ?? payload.phoneNumberId) as string | null,
       structuredName: (structuredData.name as string) ?? null,
       structuredRatingLabel,
       structuredRatingText: ((structuredData.rating as any)?.text as string) ?? null,
@@ -203,11 +213,10 @@ export class WebhookProcessor {
     const campaignContactId = existingCall.campaign_contact_id ?? callData.campaignContactId
     if (!campaignContactId) return
 
-    // Busca via CampaignRepository — sem Supabase
     const campaign = await this.campaignRepository.findByCampaignContactId(campaignContactId)
     if (!campaign) return
 
-    const endedReason = call.endedReason as string
+    const endedReason = (call.endedReason ?? callData.endedReason) as string
 
     const outcome = classifyCallOutcome({
       successEvaluation: callData.successEvaluation,

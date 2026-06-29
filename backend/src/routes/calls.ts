@@ -39,8 +39,11 @@ const extractRawSummary = (metadataRaw: unknown): string | undefined => {
   return rawCall.analysis?.summary ?? raw.analysis?.summary ?? rawCall.summary ?? raw.summary
 }
 
-const extractRawArtifact = (metadataRaw: unknown): Record<string, any> =>
-  asRecord(extractRawCall(metadataRaw).artifact)
+const extractRawArtifact = (metadataRaw: unknown): Record<string, any> => {
+  const raw = asRecord(metadataRaw)
+  const rawCall = extractRawCall(metadataRaw)
+  return asRecord(rawCall.artifact ?? raw.artifact)
+}
 
 const parseDateValue = (value: unknown): Date | null => {
   if (!value) return null
@@ -54,7 +57,9 @@ const calculateDurationSeconds = (startedAt: Date | null, endedAt: Date | null):
 }
 
 const extractCost = (metadataRaw: unknown, typeNames: string[]): number => {
-  const costs = extractRawCall(metadataRaw).costs
+  const raw = asRecord(metadataRaw)
+  const rawCall = extractRawCall(metadataRaw)
+  const costs = rawCall.costs ?? raw.costs
   if (!Array.isArray(costs)) return 0
   return costs
     .filter((cost: any) => typeNames.includes(String(cost?.type ?? '').toLowerCase()))
@@ -82,28 +87,32 @@ const mapCall = (call: CallWithRelations) => {
   const analysis = extractAnalysis(call.metadata_raw)
   const rawCall = extractRawCall(call.metadata_raw)
   const artifact = extractRawArtifact(call.metadata_raw)
-  const rawStartedAt = parseDateValue(rawCall.startedAt)
-  const rawEndedAt = parseDateValue(rawCall.endedAt)
+  const rawStartedAt = parseDateValue(rawCall.startedAt ?? (call.metadata_raw as any)?.startedAt)
+  const rawEndedAt = parseDateValue(rawCall.endedAt ?? (call.metadata_raw as any)?.endedAt)
   const startedAt = call.started_at ?? rawStartedAt
   const endedAt = call.ended_at ?? rawEndedAt
   const durationSeconds =
     call.duration_seconds ??
     (typeof rawCall.durationSeconds === 'number' ? rawCall.durationSeconds : null) ??
+    (typeof (call.metadata_raw as any)?.durationSeconds === 'number' ? (call.metadata_raw as any)?.durationSeconds : null) ??
     calculateDurationSeconds(startedAt, endedAt)
   const recordingUrl =
     call.recording_url ??
     artifact.recording?.url ??
     artifact.recordingUrl ??
-    rawCall.recordingUrl
+    rawCall.recordingUrl ??
+    (call.metadata_raw as any)?.recordingUrl
   const stereoRecordingUrl =
     call.stereo_recording_url ??
     artifact.recording?.stereoRecordingUrl ??
     artifact.stereoRecordingUrl ??
-    rawCall.stereoRecordingUrl
+    rawCall.stereoRecordingUrl ??
+    (call.metadata_raw as any)?.stereoRecordingUrl
   const transcript =
     call.transcript ??
     artifact.transcript ??
-    rawCall.transcript
+    rawCall.transcript ??
+    (call.metadata_raw as any)?.transcript
   const summary =
     call.summary ??
     extractRawSummary(call.metadata_raw)
@@ -112,13 +121,14 @@ const mapCall = (call: CallWithRelations) => {
     (typeof analysis.successEvaluation === 'boolean'
       ? String(analysis.successEvaluation)
       : analysis.successEvaluation ? String(analysis.successEvaluation) : undefined)
-  const custoStt = Number(call.custo_stt ?? extractCost(call.metadata_raw, ['stt', 'transcription']))
+  const custoStt = Number(call.custo_stt ?? extractCost(call.metadata_raw, ['stt', 'transcription', 'transcriber']))
   const custoTts = Number(call.custo_tts ?? extractCost(call.metadata_raw, ['tts', 'voice']))
   const custoVapi = Number(call.custo_vapi ?? extractCost(call.metadata_raw, ['vapi', 'service']))
   const custoTotal = Number(
     call.custo_total ??
     rawCall.cost ??
-    rawCall.costs?.reduce?.((sum: number, cost: any) => sum + Number(cost?.amount ?? 0), 0) ??
+    (call.metadata_raw as any)?.cost ??
+    (rawCall.costs ?? (call.metadata_raw as any)?.costs)?.reduce?.((sum: number, cost: any) => sum + Number(cost?.amount ?? 0), 0) ??
     0,
   )
 

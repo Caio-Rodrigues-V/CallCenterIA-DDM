@@ -29,10 +29,5 @@ COPY --from=backend-build /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=frontend-build /app/dist ./public
 COPY backend/prisma ./prisma
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "node dist/queues/callWorker.js & node dist/server.js"]
 
-# bust 20260624093259
-
-# bust 20260624104834
-
-# bust2 20260624105545
