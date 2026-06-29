@@ -190,9 +190,12 @@ export const Contacts: React.FC = () => {
         const instKey = keys.find(k => k === 'instituicao' || k === 'empresa') ||
                         keys.find(k => k.includes('institu') || k.includes('empresa') || k.includes('curso'))
 
+        const rawCpf = cpfKey ? String(n[cpfKey]).replace(/\D/g, '') : ''
+        const paddedCpf = rawCpf.length > 0 ? rawCpf.padStart(11, '0') : ''
+
         return {
           nome: nomeKey ? n[nomeKey] : 'Sem Nome',
-          cpf: cpfKey ? String(n[cpfKey]) : '',
+          cpf: paddedCpf,
           telefone: telKey ? String(n[telKey]) : '',
           instituicao: instKey ? n[instKey] : '',
         }
