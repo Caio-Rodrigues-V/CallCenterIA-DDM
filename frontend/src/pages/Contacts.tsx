@@ -170,39 +170,56 @@ export const Contacts: React.FC = () => {
     if (!importCampaignId) return alert('Selecione uma campanha de destino.')
     if (!importPreview.length) return alert('Arquivo vazio ou inválido.')
 
+    const getValueByPatterns = (rowNormalized: any, patterns: string[], isPhone = false) => {
+      // 1. Try exact matches first
+      for (const pattern of patterns) {
+        if (rowNormalized[pattern] !== undefined && String(rowNormalized[pattern]).trim() !== '') {
+          return String(rowNormalized[pattern]).trim()
+        }
+      }
+      // 2. Try partial matches (includes)
+      for (const pattern of patterns) {
+        for (const key of Object.keys(rowNormalized)) {
+          if (key.includes('tipo') || key.includes('operadora') || key.includes('desc') || key.includes('label') || key.includes('status')) {
+            continue
+          }
+          if (key.includes(pattern) && rowNormalized[key] !== undefined && String(rowNormalized[key]).trim() !== '') {
+            const val = String(rowNormalized[key]).trim()
+            if (isPhone && val.replace(/\D/g, '').length < 8) {
+              continue
+            }
+            return val
+          }
+        }
+      }
+      return ''
+    }
+
     const formattedData = importPreview
       .map((row: any) => {
         const n: any = {}
         Object.keys(row).forEach(k => { n[k.toLowerCase().trim()] = row[k] })
-        
-        const keys = Object.keys(n)
-        
-        const nomeKey = keys.find(k => k === 'nome' || k === 'name') ||
-                        keys.find(k => k.includes('nome') || k.includes('name')) ||
-                        keys.find(k => k.includes('cliente'))
-                        
-        const cpfKey = keys.find(k => k === 'cpf' || k === 'documento') ||
-                       keys.find(k => k.includes('cpf') || k.includes('documento'))
-                       
-        const telKey = keys.find(k => k === 'telefone' || k === 'celular' || k === 'phone') ||
-                       keys.find(k => k.includes('tel') || k.includes('cel') || k.includes('phone') || k.includes('fone'))
-                       
-        const instKey = keys.find(k => k === 'instituicao' || k === 'empresa') ||
-                        keys.find(k => k.includes('institu') || k.includes('empresa') || k.includes('curso'))
 
-        const rawCpf = cpfKey ? String(n[cpfKey]).replace(/\D/g, '') : ''
-        const paddedCpf = rawCpf.length > 0 ? rawCpf.padStart(11, '0') : ''
+        const nome = getValueByPatterns(n, ['nome', 'name', 'cliente']) || 'Sem Nome'
+        const rawCpf = getValueByPatterns(n, ['cpf', 'documento'])
+        const cleanCpf = rawCpf.replace(/\D/g, '')
+        const cpf = cleanCpf.length > 0 ? cleanCpf.padStart(11, '0') : '00000000000'
+
+        const rawPhone = getValueByPatterns(n, ['telefone', 'celular', 'phone', 'tel', 'cel', 'fone', 'contato'], true)
+        const telefone = rawPhone.replace(/\D/g, '')
+
+        const instituicao = getValueByPatterns(n, ['instituicao', 'empresa', 'curso', 'institu'])
 
         return {
-          nome: nomeKey ? n[nomeKey] : 'Sem Nome',
-          cpf: paddedCpf,
-          telefone: telKey ? String(n[telKey]) : '',
-          instituicao: instKey ? n[instKey] : '',
+          nome,
+          cpf,
+          telefone,
+          instituicao,
         }
       })
-      .filter(r => r.telefone.replace(/\D/g, '').length > 5 && r.cpf.replace(/\D/g, '').length === CPF_DIGIT_COUNT)
+      .filter(r => r.telefone.length >= 8)
 
-    if (!formattedData.length) return alert("Nenhum contato válido. Verifique as colunas 'nome', 'telefone' e 'cpf'.")
+    if (!formattedData.length) return alert("Nenhum contato válido. Certifique-se de que a planilha possui colunas correspondentes a 'nome' (ou 'cliente') e 'telefone' (ou 'celular').")
 
     setImporting(true)
     setImportProgress({ pct: 0, label: 'Iniciando...' })

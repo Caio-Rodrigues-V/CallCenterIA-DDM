@@ -48,9 +48,12 @@ export class ContactImporter {
     const cleanPhone = (raw.telefone ?? '').replace(/\D/g, '')
     const normalizedPhone = this.normalizePhone(cleanPhone)
 
+    const rawCpf = (raw.cpf ?? '').replace(/\D/g, '')
+    const normalizedCpf = rawCpf.length > 0 ? rawCpf.padStart(11, '0') : '00000000000'
+
     return {
       nome: raw.nome ?? null,
-      cpf: (raw.cpf ?? '').replace(/\D/g, ''),
+      cpf: normalizedCpf,
       telefone: normalizedPhone,
       instituicao: raw.instituicao ?? null,
     }
