@@ -105,7 +105,11 @@ router.post('/start', async (req, res, next) => {
       }
     })
 
-    await callQueue.addBulk(jobs)
+    const chunkSize = 1000
+    for (let i = 0; i < jobs.length; i += chunkSize) {
+      const chunk = jobs.slice(i, i + chunkSize)
+      await callQueue.addBulk(chunk)
+    }
 
     await Logger.success('Campaign', `Campanha ${campaignId} enfileirada`, {
       campaignId,

@@ -4,6 +4,7 @@ import { CampaignRepository } from '../repositories/CampaignRepository.js'
 import { AppError } from '../errors/AppError.js'
 import { Logger } from './Logger.js'
 import { classifyCallOutcome } from '../lib/callClassification.js'
+import { env } from '../config/env.js'
 
 interface VapiCallbackPayload {
   type: string
@@ -35,6 +36,7 @@ export class WebhookProcessor {
       await this.callRepository.update(existingCall.id, callData)
       await Logger.success('Webhook', 'Callback VAPI processado', { callId: existingCall.id, type: payload.type })
       await this.updateCampaignContactStatus(existingCall, call, callData)
+      await this.triggerN8nAgreementWorkflow(existingCall.id, callData, metadata)
     } else {
       await this.callRepository.update(existingCall.id, this.extractPartialCallData(call, metadata, payload as unknown as Record<string, unknown>))
       await Logger.info('Webhook', 'Callback VAPI salvo parcialmente', {
@@ -230,5 +232,57 @@ export class WebhookProcessor {
     })
 
     await this.campaignRepository.updateContactStatus(campaignContactId, outcome.contactStatus)
+  }
+
+  private async triggerN8nAgreementWorkflow(
+    callId: string,
+    callData: any,
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      const n8nBaseUrl = env.n8nWebhookUrl.split('/webhook/')[0]
+      if (!n8nBaseUrl) {
+        await Logger.warn('Webhook', 'Não foi possível resolver a URL base do N8N para formalização', { callId })
+        return
+      }
+
+      const webhookUrl = `${n8nBaseUrl}/webhook/acordo_formalizado`
+
+      const payload = {
+        record: {
+          id: callId,
+          cliente: callData.structuredName || (metadata.customerName as string) || 'Sem nome',
+          cpf: (metadata.cpf as string) || '',
+          customer_number: callData.customerNumber || (metadata.customerNumber as string) || '',
+          transcript: callData.transcript,
+          summary: callData.summary,
+          campanha: metadata.campaignId || '',
+          metadata_raw: callData.metadataRaw
+        }
+      }
+
+      await Logger.info('Webhook', 'Disparando formalização de acordo no N8N', { callId, webhookUrl })
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        await Logger.error('Webhook', 'Erro ao chamar webhook de formalização no N8N', {
+          callId,
+          status: response.status,
+          statusText: response.statusText
+        })
+      } else {
+        await Logger.success('Webhook', 'Webhook de formalização chamado com sucesso', { callId })
+      }
+    } catch (error) {
+      await Logger.error('Webhook', 'Falha ao disparar webhook de formalização', {
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
   }
 }
