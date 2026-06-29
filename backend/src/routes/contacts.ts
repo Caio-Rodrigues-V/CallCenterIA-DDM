@@ -62,6 +62,27 @@ router.patch('/:id/reset', async (req, res, next) => {
   }
 })
 
+// Atualizar status do campaign_contact (usado pelo N8N)
+router.patch('/campaign-contact/status', async (req, res, next) => {
+  const { campaignContactId, status } = req.body as { campaignContactId?: string; status?: string }
+  try {
+    if (!campaignContactId) throw AppError.badRequest('campaignContactId é obrigatório')
+    if (!status) throw AppError.badRequest('status é obrigatório')
+
+    await prisma.campaignContact.update({
+      where: { id: campaignContactId },
+      data: { status, ultima_tentativa: new Date() },
+    })
+
+    await publishRealtimeEvent('contacts:changed', { campaignContactId, status })
+    await publishRealtimeEvent('campaigns:changed', {})
+
+    res.json({ success: true })
+  } catch (error) {
+    next(error)
+  }
+})
+
 // Deletar campaign_contact
 router.delete('/:id', async (req, res, next) => {
   try {

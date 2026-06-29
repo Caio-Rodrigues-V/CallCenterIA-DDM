@@ -75,7 +75,11 @@ export class WebhookProcessor {
     vapiCallId: string | null,
     metadata: Record<string, unknown>,
   ): Promise<{ id: string; campaign_contact_id: string | null }> {
-    const callRecordId = metadata.callRecordId as string | undefined
+    const rawCallRecordId = metadata.callRecordId
+    const callRecordId = typeof rawCallRecordId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawCallRecordId)
+      ? rawCallRecordId
+      : undefined
+
     if (callRecordId) {
       const existingById = await this.callRepository.findReferenceById(callRecordId)
       if (existingById) {
@@ -89,7 +93,10 @@ export class WebhookProcessor {
       if (existingByVapiId) return existingByVapiId
     }
 
-    const campaignContactId = metadata.campaignContactId as string | undefined
+    const rawCampaignContactId = metadata.campaignContactId
+    const campaignContactId = typeof rawCampaignContactId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawCampaignContactId)
+      ? rawCampaignContactId
+      : undefined
 
     if (campaignContactId) {
       const orphan = await this.callRepository.findOrphanByCampaignContactId(campaignContactId)
@@ -173,8 +180,13 @@ export class WebhookProcessor {
       structuredMainPoints,
     })
 
+    const rawCampaignContactId = metadata.campaignContactId
+    const campaignContactId = typeof rawCampaignContactId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawCampaignContactId)
+      ? rawCampaignContactId
+      : null
+
     return {
-      campaignContactId: (metadata.campaignContactId as string) ?? null,
+      campaignContactId,
       startedAt: startedAtVal,
       endedAt: endedAtVal,
       endedReason,
@@ -213,7 +225,7 @@ export class WebhookProcessor {
     callData: ReturnType<typeof this.extractCallData>,
   ): Promise<void> {
     const campaignContactId = existingCall.campaign_contact_id ?? callData.campaignContactId
-    if (!campaignContactId) return
+    if (!campaignContactId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(campaignContactId)) return
 
     const campaign = await this.campaignRepository.findByCampaignContactId(campaignContactId)
     if (!campaign) return
