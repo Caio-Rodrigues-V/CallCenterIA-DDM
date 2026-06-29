@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, Badge, Button } from './ui';
 import { Call } from '../types';
-import { Clock, FileText, Activity, DollarSign, MessageSquare, Play, Volume2, Mic, Speaker, Server, Download } from 'lucide-react';
+import { Clock, FileText, Activity, DollarSign, MessageSquare, Play, Volume2, Mic, Speaker, Server, Download, Database } from 'lucide-react';
 
 interface CallDetailsModalProps {
   isOpen: boolean;
@@ -394,6 +394,24 @@ export const CallDetailsModal: React.FC<CallDetailsModalProps> = ({ isOpen, onCl
             </div>
           </div>
         </div>
+
+        {/* Dados Brutos da Vapi */}
+        {call.metadata_raw && (
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+            <details className="group">
+              <summary className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center justify-between cursor-pointer select-none">
+                <span className="flex items-center gap-2">
+                  <Database className="w-4 h-4" /> Histórico Completo da Vapi (JSON)
+                </span>
+                <span className="text-xs text-slate-400 group-open:hidden">Clique para abrir</span>
+                <span className="text-xs text-slate-400 hidden group-open:inline">Clique para fechar</span>
+              </summary>
+              <div className="mt-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-lg overflow-x-auto font-mono text-xs border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 max-h-60 overflow-y-auto">
+                <pre>{JSON.stringify(call.metadata_raw, null, 2)}</pre>
+              </div>
+            </details>
+          </div>
+        )}
 
       </div>
     </Modal>
