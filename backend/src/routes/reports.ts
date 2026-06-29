@@ -13,7 +13,10 @@ const serializeBigInt = (data: any): any =>
 
 const getAgreementRows = async (query: { agent?: string; campaignId?: string }) => {
   const calls = await prisma.call.findMany({
-    orderBy: [{ started_at: 'desc' }, { created_at: 'desc' }],
+    orderBy: [
+      { started_at: { sort: 'desc', nulls: 'last' } },
+      { created_at: 'desc' }
+    ],
     include: {
       campaign_contact: {
         include: {

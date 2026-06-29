@@ -68,7 +68,10 @@ const extractCost = (metadataRaw: unknown, typeNames: string[]): number => {
 
 async function findCalls(limit = 1000) {
   return prisma.call.findMany({
-    orderBy: [{ started_at: 'desc' }, { created_at: 'desc' }],
+    orderBy: [
+      { started_at: { sort: 'desc', nulls: 'last' } },
+      { created_at: 'desc' }
+    ],
     take: limit,
     include: {
       campaign_contact: {
