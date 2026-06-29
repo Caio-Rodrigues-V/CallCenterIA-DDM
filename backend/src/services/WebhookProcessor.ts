@@ -36,7 +36,7 @@ export class WebhookProcessor {
       await this.callRepository.update(existingCall.id, callData)
       await Logger.success('Webhook', 'Callback VAPI processado', { callId: existingCall.id, type: payload.type })
       await this.updateCampaignContactStatus(existingCall, call, callData)
-      await this.triggerN8nAgreementWorkflow(existingCall.id, callData, metadata)
+      // await this.triggerN8nAgreementWorkflow(existingCall.id, callData, metadata)
     } else {
       await this.callRepository.update(existingCall.id, this.extractPartialCallData(call, metadata, payload as unknown as Record<string, unknown>))
       await Logger.info('Webhook', 'Callback VAPI salvo parcialmente', {
