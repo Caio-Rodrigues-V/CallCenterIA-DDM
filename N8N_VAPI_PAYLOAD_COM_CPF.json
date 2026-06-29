@@ -18,6 +18,24 @@
         "firstMessage": "Olá {{ $('Validador do Telefone').item.json.body.customerName }} sou a Júlia, falo em nome da DDM, que atua junto à {{ $json.assistantOverrides.variableValues.instituicao }}. Eu ligo para informar que você possui um débito total à vista de {{ $json.assistantOverrides.variableValues.ValorBrutoAVista }} em aberto. Tudo bem com você?",
         "variableValues": {
             "instituicao": "{{ $json.assistantOverrides.variableValues.instituicao }}",
+            "Valorcpf": "{{ $('Webhook').item.json.body.cpf }}",
+            "PgtoAvista": {
+                "ValorFinal": "{{ $json.assistantOverrides.variableValues.ValorFinalAVista }}",
+                "ValorTotal": "{{ $json.assistantOverrides.variableValues.ValorBrutoAVista }}",
+                "PercDesconto": "{{ $json.assistantOverrides.variableValues.PercDescAVista }}",
+                "ValorDesconto": "{{ $json.assistantOverrides.variableValues.ValorDescAVista }}"
+            },
+            "PgtoParceladoCartao": {
+                "Parcelas": "{{ $json.assistantOverrides.variableValues.ParcelasCartao }}",
+                "ValorParcela": "{{ $json.assistantOverrides.variableValues.ValorFinalCartao }}",
+                "ValorFinal": "{{ $json.assistantOverrides.variableValues.ValorFinalCartao }}"
+            },
+            "CalculoBoleto": {
+                "ValorCobrarBoleto": "{{ $json.assistantOverrides.variableValues.ValorFinalBoleto }}",
+                "SubtotalBoleto": "{{ $json.assistantOverrides.variableValues.ValorBrutoBoleto }}",
+                "HonorarioBoleto": "{{ $json.assistantOverrides.variableValues.ValorDescParcBoleto }}"
+            },
+            "ParcelasBoleto": "{{ $json.assistantOverrides.variableValues.ParcelasBoleto }}",
             "ValorBrutoCartao": "{{ $json.assistantOverrides.variableValues.ValorBrutoCartao }}",
             "PercDescParcCartao": "{{ $json.assistantOverrides.variableValues.PercDescParcCartao }}",
             "ValorDescParcCartao": "{{ $json.assistantOverrides.variableValues.ValorDescParcCartao }}",
@@ -30,8 +48,7 @@
             "ValorBrutoBoleto": "{{ $json.assistantOverrides.variableValues.ValorBrutoBoleto }}",
             "PercDescParcBoleto": "{{ $json.assistantOverrides.variableValues.PercDescParcBoleto }}",
             "ValorDescParcBoleto": "{{ $json.assistantOverrides.variableValues.ValorDescParcBoleto }}",
-            "ValorFinalBoleto": "{{ $json.assistantOverrides.variableValues.ValorFinalBoleto }}",
-            "ParcelasBoleto": "{{ $json.assistantOverrides.variableValues.ParcelasBoleto }}"
+            "ValorFinalBoleto": "{{ $json.assistantOverrides.variableValues.ValorFinalBoleto }}"
         }
     }
 }
